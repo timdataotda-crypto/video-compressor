@@ -173,9 +173,15 @@ class JobManager:
             with self._lock:
                 self._active_compressors.append(compressor)
 
+            # FFmpeg memancarkan progress puluhan kali per detik. Menulis
+            # semuanya ke SQLite membuat worker saling memperebutkan lock.
+            last_written = {"pct": -1.0}
+
             def _progress(j: Job, pct: float, _msg: str) -> None:
                 j.progress = pct
-                self.db.update_job(j)
+                if pct - last_written["pct"] >= 1.0 or pct >= 99.0:
+                    last_written["pct"] = pct
+                    self.db.update_job(j)
                 if on_job_update:
                     on_job_update(j)
 

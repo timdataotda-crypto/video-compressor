@@ -5,7 +5,11 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
-from app.ffmpeg.hardware import EncoderChoice, detect_encoder
+from app.ffmpeg.hardware import (
+    EncoderChoice,
+    detect_encoder,
+    mark_encoder_unusable,
+)
 from app.utils.paths import find_binary
 from app.utils.proc import hidden_process_kwargs, null_device
 
@@ -53,10 +57,69 @@ class FFmpegRunner:
         encoder = detect_encoder(self.hardware)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        use_crf = mode == "crf" and encoder.name == EncoderChoice.LIBX264
+        try:
+            self._encode_with(
+                encoder=encoder.name,
+                input_path=input_path,
+                output_path=output_path,
+                video_bitrate_kbps=video_bitrate_kbps,
+                audio_bitrate_kbps=audio_bitrate_kbps,
+                include_audio=include_audio,
+                scale_filter=scale_filter,
+                duration=duration,
+                preset=preset,
+                two_pass=two_pass,
+                passlog_prefix=passlog_prefix,
+                on_progress=on_progress,
+                mode=mode,
+                crf=crf,
+            )
+            return
+        except FFmpegError:
+            if self._cancelled or encoder.name == EncoderChoice.LIBX264:
+                raise
+            # Encoder hardware bisa terdaftar di `-encoders` tapi tidak jalan
+            # (driver/GPU tidak ada). Jangan gagalkan job — ulangi dengan CPU.
+            mark_encoder_unusable(encoder.name.value)
+
+        self._encode_with(
+            encoder=EncoderChoice.LIBX264,
+            input_path=input_path,
+            output_path=output_path,
+            video_bitrate_kbps=video_bitrate_kbps,
+            audio_bitrate_kbps=audio_bitrate_kbps,
+            include_audio=include_audio,
+            scale_filter=scale_filter,
+            duration=duration,
+            preset=preset,
+            two_pass=two_pass,
+            passlog_prefix=passlog_prefix,
+            on_progress=on_progress,
+            mode=mode,
+            crf=crf,
+        )
+
+    def _encode_with(
+        self,
+        encoder: EncoderChoice,
+        input_path: Path,
+        output_path: Path,
+        video_bitrate_kbps: int,
+        audio_bitrate_kbps: int,
+        include_audio: bool,
+        scale_filter: Optional[str],
+        duration: float,
+        preset: str,
+        two_pass: bool,
+        passlog_prefix: Optional[Path],
+        on_progress: Optional[ProgressCallback],
+        mode: str,
+        crf: int,
+    ) -> None:
+        use_crf = mode == "crf" and encoder == EncoderChoice.LIBX264
         use_two_pass = (
             two_pass
-            and encoder.name == EncoderChoice.LIBX264
+            and encoder == EncoderChoice.LIBX264
             and not use_crf
         )
 
@@ -71,7 +134,7 @@ class FFmpegRunner:
                 scale_filter=scale_filter,
                 duration=duration,
                 preset=preset,
-                encoder=encoder.name,
+                encoder=encoder,
                 pass_num=1,
                 passlog=prefix,
                 on_progress=on_progress,
@@ -89,7 +152,7 @@ class FFmpegRunner:
                 scale_filter=scale_filter,
                 duration=duration,
                 preset=preset,
-                encoder=encoder.name,
+                encoder=encoder,
                 pass_num=2,
                 passlog=prefix,
                 on_progress=on_progress,
@@ -110,7 +173,7 @@ class FFmpegRunner:
             scale_filter=scale_filter,
             duration=duration,
             preset=preset,
-            encoder=encoder.name,
+            encoder=encoder,
             pass_num=0,
             passlog=None,
             on_progress=on_progress,
