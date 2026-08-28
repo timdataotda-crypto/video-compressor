@@ -1,0 +1,18 @@
+{
+  "target_size_mb": 19.0,
+  "safety_margin": 0.94,
+  "retry_margin": 0.96,
+  "max_retries": 4,
+  "audio_bitrate_kbps": 96,
+  "codec": "h264",
+  "preset": "slow",
+  "resolution_mode": "auto",
+  "workers": 2,
+  "recursive": true,
+  "preserve_structure": true,
+  "skip_existing": true,
+  "auto_retry": true,
+  "hardware_acceleration": "auto",
+  "quality_profile": "maximum",
+  "crf_fallback": true
+}

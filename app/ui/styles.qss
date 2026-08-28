@@ -1,0 +1,108 @@
+/* Drone Compressor — compact utility UI */
+QWidget {
+    background-color: #1a1d23;
+    color: #e8eaed;
+    font-family: "SF Pro Text", "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow {
+    background-color: #1a1d23;
+}
+
+QLabel#titleLabel {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #f0f3f7;
+}
+
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #252a33;
+    border: 1px solid #3a4150;
+    border-radius: 6px;
+    padding: 6px 10px;
+    selection-background-color: #3d7eff;
+}
+
+QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
+    border-color: #5b8cff;
+}
+
+QPushButton {
+    background-color: #2d3440;
+    border: 1px solid #3a4150;
+    border-radius: 6px;
+    padding: 8px 14px;
+}
+
+QPushButton:hover {
+    background-color: #3a4250;
+}
+
+QPushButton:pressed {
+    background-color: #222831;
+}
+
+QPushButton#startButton {
+    background-color: #2f6fed;
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 12px 24px;
+    font-size: 14px;
+}
+
+QPushButton#startButton:hover {
+    background-color: #4580f5;
+}
+
+QPushButton#startButton:disabled {
+    background-color: #3a4150;
+    color: #888;
+}
+
+QProgressBar {
+    background-color: #252a33;
+    border: 1px solid #3a4150;
+    border-radius: 6px;
+    text-align: center;
+    height: 22px;
+}
+
+QProgressBar::chunk {
+    background-color: #2f6fed;
+    border-radius: 5px;
+}
+
+QTableWidget {
+    background-color: #1f242c;
+    gridline-color: #2e3542;
+    border: 1px solid #3a4150;
+    border-radius: 6px;
+}
+
+QHeaderView::section {
+    background-color: #252a33;
+    color: #aab2bf;
+    border: none;
+    padding: 6px;
+}
+
+QCheckBox {
+    spacing: 8px;
+}
+
+QGroupBox {
+    border: 1px solid #3a4150;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+    color: #9aa3b2;
+}
