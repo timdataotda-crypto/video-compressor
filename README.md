@@ -81,6 +81,20 @@ FFmpeg sudah termasuk di dalamnya, tidak perlu install apa pun lagi.
 
 App menyimpan config/log/DB di `%LOCALAPPDATA%\DroneCompressor\`
 
+## Untuk user macOS
+
+Unduh zip dari halaman Release, extract, lalu buka `DroneCompressor.app`.
+
+- Mac **Intel**: `DroneCompressor-macos.zip`
+- Mac **Apple Silicon** (M1/M2/M3): `DroneCompressor-macos-arm64.zip`
+
+Kalau macOS menolak membuka: klik kanan app → Open. Atau di Terminal:
+
+```bash
+xattr -cr DroneCompressor.app
+open DroneCompressor.app
+```
+
 ## Dokumentasi
 
 - Rencana: `Drone_Compressor_Development_Plan (1).md`

@@ -25,8 +25,11 @@ pyinstaller --noconfirm build_macos.spec
 
 APP="$ROOT/dist/DroneCompressor.app"
 if [[ -d "$APP" ]]; then
+  codesign --force --deep --sign - "$APP" || true
+  xattr -cr "$APP" || true
   echo ""
   echo "OK: $APP"
+  file "$APP/Contents/MacOS/DroneCompressor"
   echo "Jalankan: open \"$APP\""
 else
   echo "Build gagal — app tidak ditemukan"
