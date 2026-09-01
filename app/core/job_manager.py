@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
+import re
 import threading
 
 from app.core.compressor import Compressor
@@ -12,6 +13,7 @@ from app.core.bitrate import is_target_realistic, suggest_min_target_mb
 from app.core.profiles import PROFILES, apply_quality_profile, normalize_profile_key
 from app.database.database import Database
 from app.ffmpeg.ffprobe import probe_video
+from app.geopas.client import GeopasClient
 from app.models.job import Job, JobStatus
 from app.utils.logger import get_logger
 from app.utils.paths import ensure_dir, load_config, map_output_path
@@ -21,6 +23,18 @@ logger = get_logger(__name__)
 
 BatchCallback = Callable[[Job], None]
 StatusCallback = Callable[[str], None]
+
+
+def batch_folder_name(label: str, paket_id: Optional[int] = None) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', "_", label or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ._")[:70]
+    if not cleaned:
+        cleaned = "batch"
+    if paket_id is not None:
+        suffix = f"_{paket_id}"
+        if not cleaned.endswith(suffix):
+            cleaned = f"{cleaned}{suffix}"
+    return cleaned
 
 
 class JobManager:
@@ -36,24 +50,39 @@ class JobManager:
         self._pause_event.set()  # not paused
         self._active_compressors: list[Compressor] = []
         self._lock = threading.Lock()
+        self._upload_lock = threading.Lock()
+        self.geopas_client: Optional[GeopasClient] = None
+        self.geopas_paket_id: Optional[int] = None
 
     def scan_and_create_jobs(
         self,
         source: Path,
         output: Path,
         clear_previous: bool = True,
+        *,
+        geopas_paket_id: Optional[int] = None,
+        geopas_paket_nama: str = "",
+        batch_source: str = "",
+        batch_label: str = "",
+        videos: Optional[list[Path]] = None,
     ) -> list[Job]:
         recursive = bool(self.config.get("recursive", True))
         preserve = bool(self.config.get("preserve_structure", True))
         skip_existing = bool(self.config.get("skip_existing", True))
 
-        videos = scan_videos(source, recursive=recursive)
+        found = videos if videos is not None else scan_videos(source, recursive=recursive)
         if clear_previous:
             self.db.clear_jobs()
 
+        out_root = Path(output)
+        if batch_label:
+            out_root = out_root / batch_folder_name(batch_label, geopas_paket_id)
+        source_root = Path(source).resolve()
+        locked_source = batch_source or str(source_root)
+
         jobs: list[Job] = []
-        for video in videos:
-            out = map_output_path(source, video, output, preserve_structure=preserve)
+        for video in found:
+            out = map_output_path(source_root, video, out_root, preserve_structure=preserve)
             if skip_existing and out.exists():
                 job = Job(
                     source_path=str(video),
@@ -63,6 +92,9 @@ class JobManager:
                     status=JobStatus.SKIPPED,
                     progress=100.0,
                     created_at=datetime.now().isoformat(timespec="seconds"),
+                    geopas_paket_id=geopas_paket_id,
+                    geopas_paket_nama=geopas_paket_nama,
+                    batch_source=locked_source,
                 )
             else:
                 job = Job(
@@ -71,6 +103,9 @@ class JobManager:
                     original_size=video.stat().st_size if video.exists() else 0,
                     status=JobStatus.PENDING,
                     created_at=datetime.now().isoformat(timespec="seconds"),
+                    geopas_paket_id=geopas_paket_id,
+                    geopas_paket_nama=geopas_paket_nama,
+                    batch_source=locked_source,
                 )
             job_id = self.db.insert_job(job)
             job.id = job_id
@@ -155,6 +190,12 @@ class JobManager:
 
             self._pause_event.wait()
 
+            if job.status == JobStatus.SKIPPED:
+                self.db.update_job(job)
+                if on_job_update:
+                    on_job_update(job)
+                return job
+
             compressor = Compressor(
                 target_size_mb=float(self.config.get("target_size_mb", 19)),
                 safety_margin=float(self.config.get("safety_margin", 0.94)),
@@ -219,6 +260,95 @@ class JobManager:
             on_status(f"Selesai. Completed={done} Failed={failed}")
         return results
 
+    def jobs_ready_to_upload(self, jobs: Optional[list[Job]] = None) -> list[Job]:
+        rows = jobs if jobs is not None else self.db.list_jobs()
+        ready: list[Job] = []
+        for job in rows:
+            if job.status not in (
+                JobStatus.COMPLETED,
+                JobStatus.SKIPPED,
+                JobStatus.UPLOAD_FAILED,
+            ):
+                continue
+            if Path(job.output_path).is_file():
+                ready.append(job)
+        return ready
+
+    def upload_jobs(
+        self,
+        jobs: list[Job],
+        on_job_update: Optional[BatchCallback] = None,
+        on_status: Optional[StatusCallback] = None,
+    ) -> list[Job]:
+        self._cancel_event.clear()
+        self._pause_event.set()
+        if not self.geopas_client:
+            raise RuntimeError("Geopas belum dipilih.")
+        has_paket = any(j.geopas_paket_id for j in jobs) or self.geopas_paket_id
+        if not has_paket:
+            raise RuntimeError("Tidak ada paket pekerjaan terkunci pada job.")
+        results: list[Job] = []
+        total = len(jobs)
+        for index, job in enumerate(jobs, start=1):
+            if self._cancel_event.is_set():
+                break
+            self._pause_event.wait()
+            if on_status:
+                dest = job.geopas_paket_nama or (
+                    f"#{job.geopas_paket_id}" if job.geopas_paket_id else "Geopas"
+                )
+                on_status(
+                    f"Mengunggah {index}/{total} ke {dest}: {Path(job.output_path).name}"
+                )
+            results.append(self._upload_one(job, on_job_update))
+        if on_status:
+            ok = sum(1 for j in results if j.status == JobStatus.COMPLETED and not j.error)
+            failed = sum(1 for j in results if j.status == JobStatus.UPLOAD_FAILED)
+            on_status(f"Unggah selesai. OK={ok} Gagal={failed}")
+        return results
+
+    def _upload_one(
+        self,
+        job: Job,
+        on_job_update: Optional[BatchCallback],
+    ) -> Job:
+        output = Path(job.output_path)
+        if not output.is_file():
+            job.status = JobStatus.UPLOAD_FAILED
+            job.error = "File output lokal tidak ditemukan."
+            self.db.update_job(job)
+            if on_job_update:
+                on_job_update(job)
+            return job
+        job.status = JobStatus.UPLOADING
+        job.error = ""
+        self.db.update_job(job)
+        if on_job_update:
+            on_job_update(job)
+        try:
+            assert self.geopas_client is not None
+            paket_id = job.geopas_paket_id or self.geopas_paket_id
+            if not paket_id:
+                raise RuntimeError("Job tidak punya paket pekerjaan terkunci.")
+            self.geopas_client.upload_video(int(paket_id), output)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Unggah Geopas gagal untuk %s", output.name)
+            job.status = JobStatus.UPLOAD_FAILED
+            job.progress = 100.0
+            job.error = f"File lokal aman. Unggah Geopas gagal: {exc}"
+            self.db.update_job(job)
+            if on_job_update:
+                on_job_update(job)
+            return job
+        job.status = JobStatus.COMPLETED
+        job.progress = 100.0
+        job.error = ""
+        job.mark_completed()
+        self.db.update_job(job)
+        if on_job_update:
+            on_job_update(job)
+        return job
+
     def cancel(self) -> None:
         self._cancel_event.set()
         with self._lock:
@@ -236,7 +366,11 @@ class JobManager:
         return {
             "total": len(jobs),
             "done": sum(1 for j in jobs if j.status == JobStatus.COMPLETED),
-            "failed": sum(1 for j in jobs if j.status == JobStatus.FAILED),
+            "failed": sum(
+                1
+                for j in jobs
+                if j.status in (JobStatus.FAILED, JobStatus.UPLOAD_FAILED)
+            ),
             "pending": sum(1 for j in jobs if j.status == JobStatus.PENDING),
             "skipped": sum(1 for j in jobs if j.status == JobStatus.SKIPPED),
             "remaining": sum(

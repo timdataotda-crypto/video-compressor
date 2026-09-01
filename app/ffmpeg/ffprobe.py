@@ -30,7 +30,7 @@ def probe_video(path: Path | str) -> VideoInfo:
     cmd = [
         str(_ffprobe_bin()),
         "-v",
-        "quiet",
+        "error",
         "-print_format",
         "json",
         "-show_format",
@@ -51,9 +51,7 @@ def probe_video(path: Path | str) -> VideoInfo:
         raise FFprobeError(f"FFprobe timeout: {source}") from exc
 
     if result.returncode != 0:
-        raise FFprobeError(
-            f"FFprobe gagal untuk {source.name}: {result.stderr.strip() or 'unknown error'}"
-        )
+        raise FFprobeError(_describe_probe_failure(source.name, result.stderr))
 
     data = json.loads(result.stdout)
     fmt = data.get("format", {})
@@ -118,3 +116,17 @@ def _parse_rotation(stream: dict) -> int:
             except ValueError:
                 pass
     return 0
+
+
+def _describe_probe_failure(filename: str, stderr: str) -> str:
+    detail = (stderr or "").strip()
+    lower = detail.lower()
+    if "moov atom not found" in lower or "invalid data found" in lower:
+        return (
+            f"{filename} bukan MP4 utuh (atom moov tidak ada). "
+            "File ini rusak atau copy-nya belum selesai. "
+            "Salin ulang dari drone/kartu SD, jangan pakai file yang masih diunduh."
+        )
+    if detail:
+        return f"FFprobe gagal untuk {filename}: {detail}"
+    return f"FFprobe gagal untuk {filename} (kode error tanpa pesan)."

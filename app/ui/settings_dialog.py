@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QLineEdit,
     QSpinBox,
     QVBoxLayout,
 )
@@ -74,6 +75,14 @@ class SettingsDialog(QDialog):
         self.auto_retry = QCheckBox("Auto retry jika melebihi target")
         self.auto_retry.setChecked(bool(config.get("auto_retry", True)))
 
+        self.geopas_url = QLineEdit(str(config.get("geopas_base_url", "")))
+        self.geopas_url.setPlaceholderText("https://geopas.satgasprr.go.id/api")
+        self.geopas_email = QLineEdit(str(config.get("geopas_email", "")))
+        self.geopas_email.setPlaceholderText("email login Geopas")
+        self.geopas_password = QLineEdit(str(config.get("geopas_password", "")))
+        self.geopas_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.geopas_password.setPlaceholderText("password")
+
         form.addRow("Target size", self.target)
         form.addRow("Audio bitrate", self.audio)
         form.addRow("Quality profile", self.profile)
@@ -84,6 +93,9 @@ class SettingsDialog(QDialog):
         form.addRow("Safety margin", self.safety)
         form.addRow("Hardware", self.hw)
         form.addRow("", self.auto_retry)
+        form.addRow("Geopas API URL", self.geopas_url)
+        form.addRow("Geopas email", self.geopas_email)
+        form.addRow("Geopas password", self.geopas_password)
 
         layout.addLayout(form)
         buttons = QDialogButtonBox(
@@ -113,6 +125,9 @@ class SettingsDialog(QDialog):
                 "hardware_acceleration": self.hw.currentText(),
                 "quality_profile": profile_key_from_label(self.profile.currentText()),
                 "auto_retry": self.auto_retry.isChecked(),
+                "geopas_base_url": self.geopas_url.text().strip(),
+                "geopas_email": self.geopas_email.text().strip(),
+                "geopas_password": self.geopas_password.text(),
             }
         )
         return apply_quality_profile(cfg)

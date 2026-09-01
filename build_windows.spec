@@ -12,6 +12,7 @@ root = Path(SPECPATH).resolve()
 
 datas = [
     (str(root / "config.json"), "."),
+    (str(root / "logo-geopas.png"), "."),
     (str(root / "app" / "ui" / "styles.qss"), "app/ui"),
 ]
 
@@ -34,6 +35,7 @@ a = Analysis(
         "app.main",
         "app.cli",
         "app.ui.main_window",
+        "app.geopas.client",
     ],
     hookspath=[],
     hooksconfig={},

@@ -1,31 +1,38 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from collections import defaultdict
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDoubleSpinBox,
     QFileDialog,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core.bitrate import bytes_to_mb
 from app.core.job_manager import JobManager
+from app.core.scanner import scan_videos
 from app.core.profiles import (
     PROFILES,
     TARGET_PRESETS_MB,
@@ -36,6 +43,10 @@ from app.core.profiles import (
     profile_labels,
 )
 from app.database.database import Database
+from app.ffmpeg.ffprobe import FFprobeError, probe_video
+from app.geopas.client import GeopasClient, GeopasError
+from app.geopas.models import PaketPekerjaan, Wilayah
+from app.geopas.wilayah import children_of, filter_paket, split_wilayah
 from app.models.job import Job, JobStatus
 from app.ui.job_table import JobTable
 from app.ui.settings_dialog import SettingsDialog
@@ -43,6 +54,14 @@ from app.utils.batch_paths import infer_batch_roots
 from app.utils.deps import check_ffmpeg_deps
 from app.utils.logger import setup_logging
 from app.utils.paths import get_project_root, load_config, save_config
+
+
+@dataclass
+class LockedSource:
+    source: str
+    paket_id: int | None
+    paket_nama: str
+    file_count: int
 
 
 class Worker(QObject):
@@ -65,19 +84,76 @@ class Worker(QObject):
         self.finished.emit()
 
 
+class UploadWorker(QObject):
+    job_updated = Signal(object)
+    status = Signal(str)
+    finished = Signal()
+
+    def __init__(self, manager: JobManager, jobs: list[Job]) -> None:
+        super().__init__()
+        self.manager = manager
+        self.jobs = jobs
+
+    @Slot()
+    def run(self) -> None:
+        self.manager.upload_jobs(
+            jobs=self.jobs,
+            on_job_update=lambda job: self.job_updated.emit(job),
+            on_status=lambda msg: self.status.emit(msg),
+        )
+        self.finished.emit()
+
+
+class GeopasConnectWorker(QObject):
+    finished = Signal(object, object, object)
+    failed = Signal(str)
+
+    def __init__(self, base_url: str, email: str, password: str) -> None:
+        super().__init__()
+        self.base_url = base_url
+        self.email = email
+        self.password = password
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            client = GeopasClient(self.base_url, timeout=30.0)
+            client.login(self.email, self.password)
+            wilayah = client.list_wilayah(parent_kode="null")
+            self.finished.emit(client, wilayah, [])
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(str(exc))
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Drone Compressor")
-        self.resize(960, 720)
+        self.resize(1180, 900)
+        self.setMinimumSize(980, 720)
         self.setAcceptDrops(True)
 
         self.config = load_config()
         self.db = Database()
         self.manager = JobManager(config=self.config, db=self.db)
         self._thread: QThread | None = None
-        self._worker: Worker | None = None
+        self._worker: Worker | UploadWorker | None = None
         self._jobs: list[Job] = []
+        self._batch_kind = "compress"
+        self._geopas_client: GeopasClient | None = None
+        self._wilayah: list[Wilayah] = []
+        self._paket: list[PaketPekerjaan] = []
+        self._geopas_thread: QThread | None = None
+        self._geopas_worker: GeopasConnectWorker | None = None
+        self._geopas_watchdog = QTimer(self)
+        self._geopas_watchdog.setSingleShot(True)
+        self._geopas_watchdog.timeout.connect(self._on_geopas_timeout)
+        self._paket_updating = False
+        self._paket_search_timer = QTimer(self)
+        self._paket_search_timer.setSingleShot(True)
+        self._paket_search_timer.setInterval(400)
+        self._paket_search_timer.timeout.connect(self._search_paket_from_query)
+        self._batches: list[LockedSource] = []
 
         self._build_ui()
         self._load_styles()
@@ -92,6 +168,36 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "FFmpeg tidak ditemukan", status.message)
         self.start_btn.setEnabled(False)
 
+    def _field_label(self, text: str) -> QLabel:
+        lab = QLabel(text)
+        lab.setObjectName("fieldLabel")
+        lab.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return lab
+
+    def _folder_button(self) -> QPushButton:
+        btn = QPushButton("📁")
+        btn.setObjectName("iconButton")
+        btn.setFixedWidth(40)
+        return btn
+
+    def _header_logo(self) -> QLabel:
+        label = QLabel()
+        label.setObjectName("logoLabel")
+        path = get_project_root() / "logo-geopas.png"
+        pixmap = QPixmap(str(path)) if path.exists() else QPixmap()
+        if pixmap.isNull():
+            label.setText("SATGAS PRR")
+            label.setObjectName("titleLabel")
+            return label
+        dpr = self.devicePixelRatio() or 1.0
+        scaled = pixmap.scaledToHeight(
+            int(56 * dpr), Qt.TransformationMode.SmoothTransformation
+        )
+        scaled.setDevicePixelRatio(dpr)
+        label.setPixmap(scaled)
+        label.setFixedHeight(56)
+        return label
+
     def _build_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
@@ -100,35 +206,49 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(20, 16, 20, 16)
 
         header = QHBoxLayout()
-        title = QLabel("DRONE COMPRESSOR")
-        title.setObjectName("titleLabel")
-        header.addWidget(title)
+        header.setContentsMargins(0, 0, 0, 4)
+        header.addWidget(self._header_logo(), alignment=Qt.AlignmentFlag.AlignVCenter)
         header.addStretch()
         settings_btn = QPushButton("⚙ Settings")
         settings_btn.clicked.connect(self.open_settings)
-        header.addWidget(settings_btn)
+        header.addWidget(settings_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
         root.addLayout(header)
 
-        form_box = QGroupBox("Folders & Target")
-        form = QFormLayout(form_box)
+        form_box = QGroupBox("Folders Target")
+        form_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        form = QGridLayout(form_box)
+        form.setContentsMargins(12, 18, 12, 12)
+        form.setHorizontalSpacing(10)
+        form.setVerticalSpacing(8)
+        form.setColumnStretch(1, 1)
 
         self.source_edit = QLineEdit()
         self.source_edit.setPlaceholderText("Folder sumber video…")
-        src_row = QHBoxLayout()
-        src_row.addWidget(self.source_edit)
-        src_btn = QPushButton("📁")
+        src_btn = self._folder_button()
         src_btn.clicked.connect(self.pick_source)
-        src_row.addWidget(src_btn)
-        form.addRow("SOURCE", src_row)
+        form.addWidget(self._field_label("SOURCE"), 0, 0)
+        form.addWidget(self.source_edit, 0, 1)
+        form.addWidget(src_btn, 0, 2)
+
+        self.dest_combo = QComboBox()
+        self.dest_combo.addItem("Lokal", "local")
+        self.dest_combo.addItem("Geopas Dalrenduk", "geopas")
+        dest_mode = str(self.config.get("output_destination", "local"))
+        idx = self.dest_combo.findData(dest_mode)
+        self.dest_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.dest_combo.currentIndexChanged.connect(self._on_destination_changed)
+        form.addWidget(self._field_label("TUJUAN"), 1, 0)
+        form.addWidget(self.dest_combo, 1, 1, 1, 2)
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Folder output…")
-        out_row = QHBoxLayout()
-        out_row.addWidget(self.output_edit)
-        out_btn = QPushButton("📁")
+        out_btn = self._folder_button()
         out_btn.clicked.connect(self.pick_output)
-        out_row.addWidget(out_btn)
-        form.addRow("OUTPUT", out_row)
+        form.addWidget(self._field_label("OUTPUT"), 2, 0)
+        form.addWidget(self.output_edit, 2, 1)
+        form.addWidget(out_btn, 2, 2)
 
         self.target_preset = QComboBox()
         for mb in TARGET_PRESETS_MB:
@@ -148,11 +268,13 @@ class MainWindow(QMainWindow):
         self.target_spin.setEnabled(preset_label == "Custom")
         self.target_preset.currentIndexChanged.connect(self._on_target_preset_changed)
         self.target_spin.valueChanged.connect(self._on_target_spin_changed)
-
         target_row = QHBoxLayout()
+        target_row.setContentsMargins(0, 0, 0, 0)
+        target_row.setSpacing(8)
         target_row.addWidget(self.target_preset, stretch=2)
         target_row.addWidget(self.target_spin, stretch=1)
-        form.addRow("TARGET", target_row)
+        form.addWidget(self._field_label("TARGET"), 3, 0)
+        form.addLayout(target_row, 3, 1, 1, 2)
 
         self.quality_combo = QComboBox()
         for label in profile_labels():
@@ -160,14 +282,13 @@ class MainWindow(QMainWindow):
         profile_key = normalize_profile_key(self.config.get("quality_profile"))
         self.quality_combo.setCurrentText(PROFILES[profile_key].label)
         self.quality_hint = QLabel(PROFILES[profile_key].description)
-        self.quality_hint.setStyleSheet("color: #9aa3b2;")
+        self.quality_hint.setObjectName("hintLabel")
+        self.quality_hint.setWordWrap(True)
         self.quality_combo.currentTextChanged.connect(self._on_quality_changed)
-        quality_row = QVBoxLayout()
-        quality_row.addWidget(self.quality_combo)
-        quality_row.addWidget(self.quality_hint)
-        form.addRow("QUALITY", quality_row)
+        form.addWidget(self._field_label("QUALITY"), 4, 0)
+        form.addWidget(self.quality_combo, 4, 1, 1, 2)
+        form.addWidget(self.quality_hint, 5, 1, 1, 2)
 
-        opts = QHBoxLayout()
         self.chk_recursive = QCheckBox("Recursive folders")
         self.chk_recursive.setChecked(bool(self.config.get("recursive", True)))
         self.chk_preserve = QCheckBox("Preserve structure")
@@ -176,10 +297,110 @@ class MainWindow(QMainWindow):
         self.chk_skip.setChecked(bool(self.config.get("skip_existing", True)))
         self.chk_retry = QCheckBox("Auto retry")
         self.chk_retry.setChecked(bool(self.config.get("auto_retry", True)))
-        for w in (self.chk_recursive, self.chk_preserve, self.chk_skip, self.chk_retry):
-            opts.addWidget(w)
-        form.addRow("", opts)
-        root.addWidget(form_box)
+        opts = QGridLayout()
+        opts.setContentsMargins(0, 4, 0, 0)
+        opts.setHorizontalSpacing(16)
+        opts.setVerticalSpacing(6)
+        opts.addWidget(self.chk_recursive, 0, 0)
+        opts.addWidget(self.chk_preserve, 0, 1)
+        opts.addWidget(self.chk_skip, 1, 0)
+        opts.addWidget(self.chk_retry, 1, 1)
+        form.addLayout(opts, 6, 1, 1, 2)
+        self.lock_source_btn = QPushButton("Kunci & tambah source")
+        self.lock_source_btn.setObjectName("lockButton")
+        self.lock_source_btn.clicked.connect(self.lock_current_source)
+        form.addWidget(self.lock_source_btn, 7, 1, 1, 2)
+        form.setRowStretch(8, 1)
+
+        self.geopas_box = QGroupBox("Geopas Dalrenduk")
+        self.geopas_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        geopas = QGridLayout(self.geopas_box)
+        geopas.setContentsMargins(12, 18, 12, 12)
+        geopas.setHorizontalSpacing(10)
+        geopas.setVerticalSpacing(8)
+        geopas.setColumnStretch(1, 1)
+
+        self.geopas_email = QLineEdit(str(self.config.get("geopas_email", "")))
+        self.geopas_email.setPlaceholderText("Email login Geopas")
+        self.geopas_password = QLineEdit(str(self.config.get("geopas_password", "")))
+        self.geopas_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.geopas_password.setPlaceholderText("Password")
+        self.geopas_connect_btn = QPushButton("Hubungkan")
+        self.geopas_connect_btn.setMinimumWidth(104)
+        self.geopas_connect_btn.clicked.connect(self.connect_geopas)
+        geopas.addWidget(self._field_label("AKUN"), 0, 0)
+        geopas.addWidget(self.geopas_email, 0, 1, 1, 2)
+        pass_row = QHBoxLayout()
+        pass_row.setContentsMargins(0, 0, 0, 0)
+        pass_row.setSpacing(8)
+        pass_row.addWidget(self.geopas_password, stretch=1)
+        pass_row.addWidget(self.geopas_connect_btn)
+        geopas.addLayout(pass_row, 1, 1, 1, 2)
+
+        self.geopas_status = QLabel("Belum terhubung.")
+        self.geopas_status.setObjectName("hintLabel")
+        self.geopas_status.setWordWrap(True)
+        geopas.addWidget(self.geopas_status, 2, 1, 1, 2)
+
+        self.provinsi_combo = QComboBox()
+        self.kabupaten_combo = QComboBox()
+        self.kecamatan_combo = QComboBox()
+        self.paket_combo = QComboBox()
+        self._configure_paket_search()
+        for combo in (
+            self.provinsi_combo,
+            self.kabupaten_combo,
+            self.kecamatan_combo,
+            self.paket_combo,
+        ):
+            combo.addItem("— Pilih —", None)
+            combo.setEnabled(False)
+            combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            combo.setMinimumContentsLength(18)
+        self.provinsi_combo.currentIndexChanged.connect(self._on_provinsi_changed)
+        self.kabupaten_combo.currentIndexChanged.connect(self._on_kabupaten_changed)
+        self.kecamatan_combo.currentIndexChanged.connect(self._on_kecamatan_changed)
+        geopas.addWidget(self._field_label("PROVINSI"), 3, 0)
+        geopas.addWidget(self.provinsi_combo, 3, 1, 1, 2)
+        geopas.addWidget(self._field_label("KABUPATEN"), 4, 0)
+        geopas.addWidget(self.kabupaten_combo, 4, 1, 1, 2)
+        geopas.addWidget(self._field_label("KECAMATAN"), 5, 0)
+        geopas.addWidget(self.kecamatan_combo, 5, 1, 1, 2)
+        geopas.addWidget(self._field_label("PAKET PEKERJAAN"), 6, 0)
+        geopas.addWidget(self.paket_combo, 6, 1, 1, 2)
+        geopas.setRowStretch(7, 1)
+
+        cards = QHBoxLayout()
+        cards.setSpacing(12)
+        cards.addWidget(form_box, stretch=1)
+        cards.addWidget(self.geopas_box, stretch=1)
+        root.addLayout(cards)
+
+        queue_box = QGroupBox("Antrian source terkunci")
+        queue_layout = QVBoxLayout(queue_box)
+        queue_layout.setContentsMargins(10, 14, 10, 10)
+        self.batch_list = QListWidget()
+        self.batch_list.setObjectName("batchList")
+        self.batch_list.setMaximumHeight(110)
+        queue_layout.addWidget(self.batch_list)
+        queue_hint = QLabel(
+            "Pilih SOURCE + PAKET, lalu kunci. Ulangi untuk paket lain. "
+            "Satu kali START COMPRESSION memproses semua antrian."
+        )
+        queue_hint.setObjectName("hintLabel")
+        queue_hint.setWordWrap(True)
+        queue_layout.addWidget(queue_hint)
+        queue_btns = QHBoxLayout()
+        self.remove_batch_btn = QPushButton("Hapus antrian terpilih")
+        self.remove_batch_btn.clicked.connect(self.remove_selected_batch)
+        queue_btns.addWidget(self.remove_batch_btn)
+        queue_btns.addStretch()
+        queue_layout.addLayout(queue_btns)
+        root.addWidget(queue_box)
 
         actions = QHBoxLayout()
         self.start_btn = QPushButton("START COMPRESSION")
@@ -193,16 +414,20 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self.cancel_compression)
         self.retry_btn = QPushButton("Retry Failed")
         self.retry_btn.clicked.connect(self.retry_failed)
+        self.send_geopas_btn = QPushButton("Kirim ke Geopas")
+        self.send_geopas_btn.clicked.connect(self.send_to_geopas)
         self.open_out_btn = QPushButton("Open Output")
         self.open_out_btn.clicked.connect(self.open_output_folder)
         actions.addWidget(self.start_btn)
         actions.addWidget(self.pause_btn)
         actions.addWidget(self.cancel_btn)
         actions.addWidget(self.retry_btn)
+        actions.addWidget(self.send_geopas_btn)
         actions.addWidget(self.open_out_btn)
         actions.addStretch()
         root.addLayout(actions)
         self._paused = False
+        self._on_destination_changed()
 
         current = QGroupBox("Current Job")
         cur_layout = QVBoxLayout(current)
@@ -259,12 +484,300 @@ class MainWindow(QMainWindow):
         self.quality_hint.setText(profile.description)
         self.config = apply_quality_profile(self.config, key)
 
+    def _geopas_mode(self) -> bool:
+        return self.dest_combo.currentData() == "geopas"
+
+    def _on_destination_changed(self, _index: int = 0) -> None:
+        geopas = self._geopas_mode()
+        self.geopas_box.setVisible(geopas)
+        if hasattr(self, "start_btn"):
+            self.start_btn.setText("START COMPRESSION")
+            if hasattr(self, "send_geopas_btn"):
+                self.send_geopas_btn.setVisible(geopas)
+
+    def connect_geopas(self) -> None:
+        email = self.geopas_email.text().strip()
+        password = self.geopas_password.text()
+        base_url = str(
+            self.config.get("geopas_base_url") or "https://geopas.satgasprr.go.id/api"
+        ).strip()
+        if not email or not password:
+            QMessageBox.warning(
+                self, "Geopas", "Isi email dan password, atau atur di Settings."
+            )
+            return
+        if not base_url:
+            QMessageBox.warning(self, "Geopas", "Isi Geopas API URL di Settings.")
+            return
+        self._sync_config_from_ui()
+        self.geopas_connect_btn.setEnabled(False)
+        self.geopas_status.setText("Menghubungkan…")
+        self._geopas_thread = QThread()
+        self._geopas_worker = GeopasConnectWorker(base_url, email, password)
+        self._geopas_worker.moveToThread(self._geopas_thread)
+        self._geopas_thread.started.connect(self._geopas_worker.run)
+        self._geopas_worker.finished.connect(self._on_geopas_connected)
+        self._geopas_worker.failed.connect(self._on_geopas_failed)
+        self._geopas_worker.finished.connect(self._geopas_thread.quit)
+        self._geopas_worker.failed.connect(self._geopas_thread.quit)
+        self._geopas_worker.finished.connect(self._geopas_worker.deleteLater)
+        self._geopas_worker.failed.connect(self._geopas_worker.deleteLater)
+        self._geopas_thread.finished.connect(self._geopas_thread.deleteLater)
+        self._geopas_watchdog.start(40000)
+        self._geopas_thread.start()
+
+    @Slot(object, object, object)
+    def _on_geopas_connected(
+        self,
+        client: GeopasClient,
+        wilayah: list[Wilayah],
+        paket: list[PaketPekerjaan],
+    ) -> None:
+        self._geopas_watchdog.stop()
+        self.geopas_connect_btn.setEnabled(True)
+        self._geopas_client = client
+        self._wilayah = list(wilayah)
+        self._paket = list(paket)
+        grouped = split_wilayah(self._wilayah)
+        if grouped["provinsi"]:
+            self._fill_combo(self.provinsi_combo, grouped["provinsi"], lambda w: w.nama)
+            self.provinsi_combo.setEnabled(True)
+            self._reset_combo(self.kabupaten_combo)
+            self._reset_combo(self.kecamatan_combo)
+            self._reset_combo(self.paket_combo)
+        else:
+            self._fill_combo(
+                self.paket_combo,
+                self._paket,
+                lambda p: f"{p.nama} (#{p.id})",
+            )
+        self.geopas_status.setText(
+            f"Terhubung. {len(grouped['provinsi'])} provinsi. "
+            "Pilih wilayah untuk memuat paket."
+        )
+        self.geopas_status.setStyleSheet("color: #7dcea0;")
+        self._enable_paket_search_field()
+
+    @Slot(str)
+    def _on_geopas_failed(self, message: str) -> None:
+        self._geopas_watchdog.stop()
+        self.geopas_connect_btn.setEnabled(True)
+        self._geopas_client = None
+        self.geopas_status.setText(f"Gagal terhubung: {message}")
+        self.geopas_status.setStyleSheet("color: #e57373;")
+
+    def _on_geopas_timeout(self) -> None:
+        self.geopas_connect_btn.setEnabled(True)
+        self.geopas_status.setText(
+            "Koneksi terlalu lama. Tombol Hubungkan aktif lagi — coba ulang."
+        )
+        self.geopas_status.setStyleSheet("color: #e57373;")
+
+    def _configure_paket_search(self) -> None:
+        self.paket_combo.setEditable(True)
+        self.paket_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.paket_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.paket_combo.setMinimumContentsLength(24)
+        line = self.paket_combo.lineEdit()
+        if line is not None:
+            line.setPlaceholderText("Ketik nama paket untuk mencari…")
+            line.textEdited.connect(self._on_paket_text_edited)
+        completer = self.paket_combo.completer()
+        if completer is None:
+            completer = QCompleter(self.paket_combo)
+            self.paket_combo.setCompleter(completer)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        completer.setCompletionRole(Qt.ItemDataRole.DisplayRole)
+
+    def _enable_paket_search_field(self) -> None:
+        self.paket_combo.setEnabled(True)
+        self.paket_combo.setEditable(True)
+        line = self.paket_combo.lineEdit()
+        if line is not None:
+            line.setPlaceholderText("Ketik nama paket untuk mencari…")
+
+    def _on_paket_text_edited(self, _text: str) -> None:
+        if self._paket_updating:
+            return
+        self._paket_search_timer.start()
+
+    def _search_paket_from_query(self) -> None:
+        if self._geopas_client is None or self._paket_updating:
+            return
+        query = self.paket_combo.currentText().strip()
+        if len(query) < 2 or query.startswith("—") or query.startswith("Tidak ada"):
+            return
+        kecamatan = self.kecamatan_combo.currentData()
+        kabupaten = self.kabupaten_combo.currentData()
+        provinsi = self.provinsi_combo.currentData()
+        try:
+            rows = self._geopas_client.list_paket_pekerjaan(
+                nama=query,
+                kabupaten_id=kabupaten.id if kabupaten is not None else None,
+                provinsi_id=(
+                    None
+                    if kabupaten is not None
+                    else (provinsi.id if provinsi is not None else None)
+                ),
+            )
+        except GeopasError:
+            return
+        if not rows:
+            local = [
+                p
+                for p in self._paket
+                if query.lower() in p.nama.lower() or query in str(p.id)
+            ]
+            rows = local
+        self._fill_paket_combo(rows, keep_text=query)
+
+    def _fill_paket_combo(
+        self,
+        rows: list[PaketPekerjaan],
+        keep_text: str | None = None,
+    ) -> None:
+        self._paket = rows
+        self._paket_updating = True
+        try:
+            self._fill_combo(
+                self.paket_combo,
+                rows,
+                lambda p: f"{p.nama} (#{p.id})",
+            )
+            self._enable_paket_search_field()
+            completer = self.paket_combo.completer()
+            if completer is not None:
+                completer.setFilterMode(Qt.MatchFlag.MatchContains)
+                completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            if keep_text:
+                self.paket_combo.setEditText(keep_text)
+            elif not rows:
+                self.paket_combo.setItemText(0, "Tidak ada paket — ketik nama untuk cari")
+                self.paket_combo.setEditText("")
+        finally:
+            self._paket_updating = False
+
+    def _selected_paket(self) -> PaketPekerjaan | None:
+        paket = self.paket_combo.currentData()
+        if paket is not None:
+            return paket
+        text = self.paket_combo.currentText().strip().lower()
+        if not text:
+            return None
+        for i in range(self.paket_combo.count()):
+            item = self.paket_combo.itemData(i)
+            label = self.paket_combo.itemText(i).lower()
+            if item is not None and (text == label or text in label):
+                return item
+        for p in self._paket:
+            if text in p.nama.lower() or text == str(p.id):
+                return p
+        return None
+
+    def _reset_combo(self, combo: QComboBox) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("— Pilih —", None)
+        combo.setEnabled(False)
+        combo.blockSignals(False)
+
+    def _fill_combo(self, combo: QComboBox, items: list, label_fn) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("— Pilih —", None)
+        for item in items:
+            combo.addItem(label_fn(item), item)
+        combo.setEnabled(True)
+        combo.blockSignals(False)
+
+    def _merge_wilayah(self, items: list[Wilayah]) -> None:
+        known = {w.id for w in self._wilayah}
+        for item in items:
+            if item.id not in known:
+                self._wilayah.append(item)
+                known.add(item.id)
+
+    def _fetch_children(self, parent: Wilayah) -> list[Wilayah]:
+        cached = children_of(parent, self._wilayah)
+        if cached:
+            return cached
+        if self._geopas_client is None:
+            return []
+        try:
+            kids = self._geopas_client.list_wilayah(parent_kode=parent.kode)
+        except GeopasError as exc:
+            QMessageBox.warning(self, "Geopas", str(exc))
+            return []
+        self._merge_wilayah(kids)
+        return kids
+
+    def _on_provinsi_changed(self, _index: int = 0) -> None:
+        provinsi = self.provinsi_combo.currentData()
+        self._reset_combo(self.kabupaten_combo)
+        self._reset_combo(self.kecamatan_combo)
+        if provinsi is None:
+            self._reset_combo(self.paket_combo)
+            return
+        kabupaten = self._fetch_children(provinsi)
+        self._fill_combo(self.kabupaten_combo, kabupaten, lambda w: w.nama)
+        self._refresh_paket_combo()
+
+    def _on_kabupaten_changed(self, _index: int = 0) -> None:
+        kabupaten = self.kabupaten_combo.currentData()
+        self._reset_combo(self.kecamatan_combo)
+        if kabupaten is not None:
+            kecamatan = self._fetch_children(kabupaten)
+            self._fill_combo(self.kecamatan_combo, kecamatan, lambda w: w.nama)
+        self._refresh_paket_combo()
+
+    def _on_kecamatan_changed(self, _index: int = 0) -> None:
+        self._refresh_paket_combo()
+
+    def _refresh_paket_combo(self) -> None:
+        kecamatan = self.kecamatan_combo.currentData()
+        kabupaten = self.kabupaten_combo.currentData()
+        provinsi = self.provinsi_combo.currentData()
+        rows: list[PaketPekerjaan] = []
+        if self._geopas_client is not None and (
+            kecamatan is not None or kabupaten is not None or provinsi is not None
+        ):
+            try:
+                if kabupaten is not None:
+                    rows = self._geopas_client.list_paket_pekerjaan(
+                        kabupaten_id=kabupaten.id,
+                    )
+                elif provinsi is not None:
+                    rows = self._geopas_client.list_paket_pekerjaan(
+                        provinsi_id=provinsi.id,
+                    )
+            except GeopasError as exc:
+                self._enable_paket_search_field()
+                self._reset_combo(self.paket_combo)
+                self._enable_paket_search_field()
+                self.paket_combo.setItemText(0, f"Gagal memuat paket: {exc}")
+                return
+        else:
+            rows = filter_paket(
+                self._paket,
+                provinsi=provinsi,
+                kabupaten=kabupaten,
+                kecamatan=kecamatan,
+            )
+        self._fill_paket_combo(rows)
+
     def _sync_config_from_ui(self) -> None:
         self.config["target_size_mb"] = self.target_spin.value()
         self.config["recursive"] = self.chk_recursive.isChecked()
         self.config["preserve_structure"] = self.chk_preserve.isChecked()
         self.config["skip_existing"] = self.chk_skip.isChecked()
         self.config["auto_retry"] = self.chk_retry.isChecked()
+        self.config["output_destination"] = self.dest_combo.currentData() or "local"
+        self.config["geopas_email"] = self.geopas_email.text().strip()
+        self.config["geopas_password"] = self.geopas_password.text()
         self.config = apply_quality_profile(
             self.config, profile_key_from_label(self.quality_combo.currentText())
         )
@@ -286,18 +799,21 @@ class MainWindow(QMainWindow):
             jobs = self.db.list_jobs()
             self._jobs = jobs
             self.job_table.load_jobs(jobs)
+            self._rebuild_batches_from_jobs(jobs)
             self._refresh_summary()
             if jobs:
                 src_root, out_root = infer_batch_roots(
                     [j.source_path for j in jobs],
                     [j.output_path for j in jobs],
                 )
-                if src_root:
+                if src_root and not self._batches:
                     self.source_edit.setText(src_root)
                 if out_root:
                     self.output_edit.setText(out_root)
         else:
             self.db.clear_jobs()
+            self._batches = []
+            self._refresh_batch_list()
 
     def pick_source(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Pilih Source Folder")
@@ -305,6 +821,186 @@ class MainWindow(QMainWindow):
             self.source_edit.setText(path)
             if not self.output_edit.text():
                 self.output_edit.setText(f"{path.rstrip('/')}_COMPRESSED")
+
+    def _refresh_batch_list(self) -> None:
+        self.batch_list.clear()
+        for batch in self._batches:
+            folder = Path(batch.source).name
+            if batch.paket_id is not None:
+                text = (
+                    f"🔒 {batch.paket_nama} (#{batch.paket_id})  ·  "
+                    f"{batch.file_count} video  ·  {folder}"
+                )
+            else:
+                text = f"🔒 {folder}  ·  {batch.file_count} video"
+            self.batch_list.addItem(QListWidgetItem(text))
+
+    def _rebuild_batches_from_jobs(self, jobs: list[Job]) -> None:
+        grouped: dict[tuple[str, int | None], LockedSource] = {}
+        for job in jobs:
+            source = job.batch_source or str(Path(job.source_path).parent)
+            key = (source, job.geopas_paket_id)
+            item = grouped.get(key)
+            if item is None:
+                grouped[key] = LockedSource(
+                    source=source,
+                    paket_id=job.geopas_paket_id,
+                    paket_nama=job.geopas_paket_nama,
+                    file_count=1,
+                )
+            else:
+                item.file_count += 1
+        self._batches = list(grouped.values())
+        self._refresh_batch_list()
+
+    def _reset_paket_after_lock(self) -> None:
+        self._paket_updating = True
+        try:
+            if self.paket_combo.count() > 0:
+                self.paket_combo.setCurrentIndex(0)
+            line = self.paket_combo.lineEdit()
+            if line is not None:
+                line.setText("")
+        finally:
+            self._paket_updating = False
+
+    def lock_current_source(self) -> bool:
+        source = Path(self.source_edit.text().strip())
+        output = Path(self.output_edit.text().strip())
+        if not source.exists():
+            QMessageBox.warning(self, "Error", "Source folder tidak valid.")
+            return False
+        if not str(output):
+            QMessageBox.warning(self, "Error", "Output folder wajib diisi.")
+            return False
+
+        geopas = self._geopas_mode()
+        paket_id: int | None = None
+        paket_nama = ""
+        if geopas:
+            if self._geopas_client is None:
+                QMessageBox.warning(self, "Geopas", "Hubungkan ke Geopas dulu.")
+                return False
+            paket = self._selected_paket()
+            if paket is None:
+                QMessageBox.warning(
+                    self,
+                    "Geopas",
+                    "Pilih paket pekerjaan dulu, lalu kunci source.",
+                )
+                return False
+            paket_id = paket.id
+            paket_nama = paket.nama
+            if any(b.paket_id == paket_id for b in self._batches):
+                QMessageBox.warning(
+                    self,
+                    "Geopas",
+                    f"Paket {paket_nama} (#{paket_id}) sudah dikunci. "
+                    "Pilih paket lain agar video tidak tertukar.",
+                )
+                return False
+
+        source_key = str(source.resolve())
+        if any(b.source == source_key for b in self._batches):
+            QMessageBox.warning(self, "Error", "Source ini sudah ada di antrian terkunci.")
+            return False
+
+        self._sync_config_from_ui()
+        found = scan_videos(source, recursive=self.chk_recursive.isChecked())
+        if not found:
+            QMessageBox.information(self, "Info", "Tidak ada video di folder source ini.")
+            return False
+        readable: list[Path] = []
+        broken: list[str] = []
+        for video in found:
+            try:
+                probe_video(video)
+                readable.append(video)
+            except FFprobeError as exc:
+                broken.append(str(exc))
+        if broken:
+            preview = "\n".join(broken[:8])
+            more = f"\n…dan {len(broken) - 8} file lain." if len(broken) > 8 else ""
+            if not readable:
+                QMessageBox.critical(
+                    self,
+                    "File sumber rusak",
+                    "Semua video di folder ini tidak utuh, jadi tidak bisa dikompres "
+                    "atau dikirim ke Geopas.\n\n"
+                    f"{preview}{more}\n\n"
+                    "Salin ulang dari drone/kartu SD. Uji dulu di QuickTime: "
+                    "kalau tidak bisa diputar, file-nya masih rusak.",
+                )
+                return False
+            reply = QMessageBox.warning(
+                self,
+                "Sebagian file rusak",
+                f"{len(broken)} file rusak dilewati, {len(readable)} file utuh akan dikunci.\n\n"
+                f"{preview}{more}\n\nLanjutkan dengan file yang utuh?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
+
+        label = paket_nama if paket_nama else source.name
+        try:
+            jobs = self.manager.scan_and_create_jobs(
+                source,
+                output,
+                clear_previous=len(self._batches) == 0,
+                geopas_paket_id=paket_id,
+                geopas_paket_nama=paket_nama,
+                batch_source=source_key,
+                batch_label=label,
+                videos=readable,
+            )
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Scan gagal", str(exc))
+            return False
+        if not jobs:
+            QMessageBox.information(self, "Info", "Tidak ada video di folder source ini.")
+            return False
+
+        extra = ""
+        if geopas and len(jobs) > 1:
+            extra = (
+                f"\n\nCatatan: Geopas hanya menampilkan 1 video per paket. "
+                f"{len(jobs)} file akan diunggah; yang terakhir yang tampil."
+            )
+        self._batches.append(
+            LockedSource(
+                source=source_key,
+                paket_id=paket_id,
+                paket_nama=paket_nama,
+                file_count=len(jobs),
+            )
+        )
+        self._refresh_batch_list()
+        self._jobs = self.db.list_jobs()
+        self.job_table.load_jobs(self._jobs)
+        self._refresh_summary()
+        self.source_edit.clear()
+        if geopas:
+            self._reset_paket_after_lock()
+        self.summary_label.setText(
+            f"Terkunci: {len(jobs)} video"
+            + (f" → {paket_nama} (#{paket_id})" if paket_id else "")
+            + f". Total antrian {sum(b.file_count for b in self._batches)} file."
+            + extra.replace("\n\n", " ")
+        )
+        return True
+
+    def remove_selected_batch(self) -> None:
+        row = self.batch_list.currentRow()
+        if row < 0 or row >= len(self._batches):
+            QMessageBox.information(self, "Info", "Pilih antrian yang akan dihapus.")
+            return
+        batch = self._batches.pop(row)
+        self.db.delete_jobs_for_batch(batch.source, batch.paket_id)
+        self._refresh_batch_list()
+        self._jobs = self.db.list_jobs()
+        self.job_table.load_jobs(self._jobs)
+        self._refresh_summary()
 
     def pick_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Pilih Output Folder")
@@ -330,6 +1026,8 @@ class MainWindow(QMainWindow):
             self.quality_combo.setCurrentText(PROFILES[key].label)
             self.quality_hint.setText(PROFILES[key].description)
             self.chk_retry.setChecked(bool(self.config["auto_retry"]))
+            self.geopas_email.setText(str(self.config.get("geopas_email", "")))
+            self.geopas_password.setText(str(self.config.get("geopas_password", "")))
             self.manager.config = self.config
             save_config(self.config)
 
@@ -342,27 +1040,46 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(out))
 
     def start_compression(self) -> None:
-        source = Path(self.source_edit.text().strip())
         output = Path(self.output_edit.text().strip())
-        if not source.exists():
-            QMessageBox.warning(self, "Error", "Source folder tidak valid.")
-            return
-        if not output:
-            QMessageBox.warning(self, "Error", "Output folder wajib diisi.")
+        source_text = self.source_edit.text().strip()
+        geopas_mode = self._geopas_mode()
+        self.manager.geopas_client = self._geopas_client if geopas_mode else None
+        self.manager.geopas_paket_id = None
+        if geopas_mode and self._geopas_client is None:
+            QMessageBox.warning(
+                self,
+                "Geopas",
+                "Hubungkan ke Geopas dulu. Compress tetap ke folder lokal; "
+                "unggah dilakukan setelah selesai, setelah konfirmasi.",
+            )
             return
 
         self._sync_config_from_ui()
 
-        # Resume incomplete without rescanning if table already loaded from resume
-        resume_jobs = [
-            j
-            for j in self._jobs
-            if j.status
-            in (JobStatus.PENDING, JobStatus.FAILED, JobStatus.CANCELLED)
-        ]
-        if resume_jobs and self.db.count_incomplete() > 0:
+        if source_text:
+            src_path = Path(source_text)
+            already = False
+            if src_path.exists():
+                already = any(b.source == str(src_path.resolve()) for b in self._batches)
+            if not already:
+                locked = self.lock_current_source()
+                if not locked and not self._batches:
+                    return
+
+        if self._batches:
             jobs = self.db.list_jobs()
         else:
+            source = Path(source_text)
+            if not source.exists():
+                QMessageBox.warning(
+                    self,
+                    "Error",
+                    "Kunci source dulu, atau pilih folder SOURCE.",
+                )
+                return
+            if not str(output):
+                QMessageBox.warning(self, "Error", "Output folder wajib diisi.")
+                return
             try:
                 jobs = self.manager.scan_and_create_jobs(source, output)
             except Exception as exc:  # noqa: BLE001
@@ -417,7 +1134,9 @@ class MainWindow(QMainWindow):
         self._paused = False
         self.cancel_btn.setEnabled(True)
         self.retry_btn.setEnabled(False)
+        self.send_geopas_btn.setEnabled(False)
 
+        self._batch_kind = "compress"
         self._thread = QThread()
         self._worker = Worker(self.manager, jobs)
         self._worker.moveToThread(self._thread)
@@ -465,10 +1184,97 @@ class MainWindow(QMainWindow):
         self._refresh_summary()
         self.start_compression()
 
+    def send_to_geopas(self) -> None:
+        self._offer_geopas_upload(force=True)
+
+    def _jobs_ready_to_send(self) -> list[Job]:
+        return self.manager.jobs_ready_to_upload(self.db.list_jobs())
+
+    def _offer_geopas_upload(self, force: bool = False) -> None:
+        if not self._geopas_mode():
+            if force:
+                QMessageBox.information(
+                    self, "Geopas", "Pilih tujuan Geopas Dalrenduk dulu."
+                )
+            return
+        if self._geopas_client is None:
+            QMessageBox.warning(self, "Geopas", "Hubungkan ke Geopas dulu.")
+            return
+        ready = self._jobs_ready_to_send()
+        if not ready:
+            QMessageBox.information(
+                self,
+                "Geopas",
+                "Tidak ada file hasil compress di folder output untuk dikirim.",
+            )
+            return
+        missing = [j for j in ready if not j.geopas_paket_id]
+        mapped = [j for j in ready if j.geopas_paket_id]
+        if missing and not mapped:
+            QMessageBox.warning(
+                self,
+                "Geopas",
+                "Job belum terkunci ke paket. Kunci SOURCE + PAKET dulu, "
+                "lalu kompres ulang.",
+            )
+            return
+        if missing:
+            QMessageBox.warning(
+                self,
+                "Geopas",
+                f"{len(missing)} file tanpa paket terkunci dilewati. "
+                "Hanya file yang sudah dikunci ke paket yang dikirim.",
+            )
+        by_paket: dict[tuple[int, str], list[Job]] = defaultdict(list)
+        for job in mapped:
+            assert job.geopas_paket_id is not None
+            nama = job.geopas_paket_nama or f"#{job.geopas_paket_id}"
+            by_paket[(job.geopas_paket_id, nama)].append(job)
+        lines = []
+        for (pid, nama), group in by_paket.items():
+            note = ""
+            if len(group) > 1:
+                note = " — Geopas hanya menampilkan 1 video (unggahan terakhir)"
+            lines.append(f"• {nama} (#{pid}) — {len(group)} video{note}")
+        reply = QMessageBox.question(
+            self,
+            "Kirim ke server?",
+            f"Kirim {len(mapped)} video ke {len(by_paket)} paket pekerjaan?\n\n"
+            + "\n".join(lines),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._start_geopas_upload(mapped)
+
+    def _start_geopas_upload(self, jobs: list[Job], paket_id: int | None = None) -> None:
+        self.manager.geopas_client = self._geopas_client
+        self.manager.geopas_paket_id = paket_id
+        self.start_btn.setEnabled(False)
+        self.send_geopas_btn.setEnabled(False)
+        self.retry_btn.setEnabled(False)
+        self.pause_btn.setEnabled(True)
+        self.pause_btn.setText("Pause")
+        self._paused = False
+        self.cancel_btn.setEnabled(True)
+        self._batch_kind = "upload"
+        self._thread = QThread()
+        self._worker = UploadWorker(self.manager, jobs)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.job_updated.connect(self.on_job_updated)
+        self._worker.status.connect(self.summary_label.setText)
+        self._worker.finished.connect(self.on_batch_finished)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.start()
+
     @Slot(object)
     def on_job_updated(self, job: Job) -> None:
         self.job_table.upsert_job(job)
-        self.current_label.setText(Path(job.source_path).name)
+        paket = f" → {job.geopas_paket_nama}" if job.geopas_paket_nama else ""
+        self.current_label.setText(f"{Path(job.source_path).name}{paket}")
         self.progress.setValue(int(job.progress))
         orig = bytes_to_mb(job.original_size)
         out = bytes_to_mb(job.output_size) if job.output_size else 0
@@ -479,14 +1285,35 @@ class MainWindow(QMainWindow):
         self._refresh_summary()
 
     def on_batch_finished(self) -> None:
+        kind = self._batch_kind
         self.start_btn.setEnabled(True)
         self.pause_btn.setEnabled(False)
         self.pause_btn.setText("Pause")
         self._paused = False
         self.cancel_btn.setEnabled(False)
         self.retry_btn.setEnabled(True)
+        self.send_geopas_btn.setEnabled(True)
         self._refresh_summary()
         self.progress.setValue(100)
+        self._jobs = self.db.list_jobs()
+        if kind == "upload":
+            failed = sum(
+                1 for j in self._jobs if j.status == JobStatus.UPLOAD_FAILED
+            )
+            if failed:
+                QMessageBox.warning(
+                    self,
+                    "Unggah selesai",
+                    f"{failed} file gagal diunggah. File hasil compress tetap ada di folder output.",
+                )
+            else:
+                QMessageBox.information(
+                    self, "Selesai", "Unggah ke Geopas selesai."
+                )
+            return
+        if self._geopas_mode():
+            self._offer_geopas_upload()
+            return
         QMessageBox.information(self, "Selesai", "Batch compression selesai.")
 
     def _refresh_summary(self) -> None:

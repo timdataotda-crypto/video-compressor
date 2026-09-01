@@ -11,6 +11,8 @@ class JobStatus(str, Enum):
     ANALYZING = "ANALYZING"
     COMPRESSING = "COMPRESSING"
     VALIDATING = "VALIDATING"
+    UPLOADING = "UPLOADING"
+    UPLOAD_FAILED = "UPLOAD_FAILED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
@@ -34,6 +36,9 @@ class Job:
     created_at: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    geopas_paket_id: Optional[int] = None
+    geopas_paket_nama: str = ""
+    batch_source: str = ""
 
     def mark_started(self) -> None:
         self.started_at = datetime.now().isoformat(timespec="seconds")

@@ -1,0 +1,4424 @@
+{
+  "info": {
+    "_postman_id": "a1ad2152-aa77-49fa-a7e7-0d415e1a7f78",
+    "name": "Geopas API",
+    "description": "Koleksi Postman untuk seluruh endpoint REST API pada `routes/api.php` proyek Geopas (Laravel + JWT auth) — sistem pemantauan rehabilitasi & rekonstruksi pascabencana.\n\n**Autentikasi**\n1. Jalankan request `Auth > Login` (default akun demo: `demo@admin` / `demo@admin`). Token JWT hasil login otomatis disimpan ke variable collection `token` lewat test script.\n2. Semua request lain memakai auth Bearer Token `{{token}}` yang diwariskan dari level Collection.\n\n**Format response** seragam: `{ \"success\": bool, \"message\": string, \"data\": ... }`.\n\n**Query parameter umum** pada endpoint List: `paginate`, `limit`, `skip`, `with` (eager load relasi, pisahkan dengan koma), `flag_trash` (-1 hanya data terhapus, 1 termasuk data terhapus), `is_trash`, `count`, `sum`, `first`, ditambah filter spesifik per resource (mis. `?wilayah_id=1`).\n\n**Chaining data contoh**: setiap request `Create` memiliki test script yang otomatis menyimpan `id` hasil response ke collection variable terkait (mis. `wilayah_id`, `indikator_id`, dst) sehingga bisa langsung dipakai oleh request `Detail`/`Update`/`Delete`/`Restore` maupun sebagai foreign key pada resource lain. Disarankan menjalankan folder demi folder sesuai urutan di collection ini (gunakan fitur *Run collection*) supaya id-nya saling terhubung.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://geopas.test/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "wilayah_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "indikator_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "pelaksana_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "pelaksana_indikator_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "sektor_terdampak_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "sektor_terdampak_detail_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "perbaikan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "masalah_kritis_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "kategori_paket_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "penyedia_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "paket_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "rincian_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "timeline_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "realisasi_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "pembayaran_pekerjaan_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "anggaran_daerah_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "alokasi_anggaran_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login untuk mendapatkan JWT Bearer token. Token akan otomatis disimpan ke variable collection `token` lewat Tests script, dan dipakai oleh seluruh request lain (kecuali Login & Excel Template) lewat auth type Bearer Token pada level Collection.\n\nDefault akun demo: `demo@admin` / `demo@admin`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"demo@admin\",\n    \"password\": \"demo@admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.token) {",
+                  "        pm.collection.variables.set('token', json.token);",
+                  "        console.log('Saved token');",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('Login success', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Logged In User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "user"
+              ]
+            },
+            "description": "Mengambil data user dari Bearer token yang sedang dipakai."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoint autentikasi. Jalankan `Login` terlebih dahulu sebelum memanggil endpoint lain."
+    },
+    {
+      "name": "Wilayah",
+      "item": [
+        {
+          "name": "List Wilayah",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/wilayah?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Wilayah.\n\nData wilayah administratif (provinsi/kabupaten/kecamatan) berbentuk pohon lewat kolom `kode` & `parent_kode`.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Wilayah",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/wilayah/{{wilayah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah",
+                "{{wilayah_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Wilayah berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Wilayah",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wilayah",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah"
+              ]
+            },
+            "description": "Membuat data Wilayah baru.\n\nData wilayah administratif (provinsi/kabupaten/kecamatan) berbentuk pohon lewat kolom `kode` & `parent_kode`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"kode\": \"13\",\n    \"parent_kode\": null,\n    \"nama\": \"Sumatera Barat\",\n    \"polygon\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('wilayah_id', json.data.id);",
+                  "        console.log('Saved wilayah_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Wilayah",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/wilayah/{{wilayah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah",
+                "{{wilayah_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Wilayah berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Sumatera Barat (Updated)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Wilayah",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/wilayah/{{wilayah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah",
+                "{{wilayah_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Wilayah berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Wilayah",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/wilayah/{{wilayah_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "wilayah",
+                "{{wilayah_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Wilayah yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Data wilayah administratif (provinsi/kabupaten/kecamatan) berbentuk pohon lewat kolom `kode` & `parent_kode`."
+    },
+    {
+      "name": "Indikator",
+      "item": [
+        {
+          "name": "List Indikator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/indikator?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Indikator.\n\nIndikator/kategori dampak bencana yang dipantau (mis. infrastruktur jalan, rumah, sekolah), berbentuk pohon lewat `kode` & `parent_kode`.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Indikator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/indikator/{{indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator",
+                "{{indikator_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Indikator berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Indikator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/indikator",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator"
+              ]
+            },
+            "description": "Membuat data Indikator baru.\n\nIndikator/kategori dampak bencana yang dipantau (mis. infrastruktur jalan, rumah, sekolah), berbentuk pohon lewat `kode` & `parent_kode`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"kode\": \"IND-01\",\n    \"parent_kode\": null,\n    \"nama\": \"Infrastruktur Jalan\",\n    \"keterangan\": \"Indikator kerusakan infrastruktur jalan akibat bencana\",\n    \"bobot\": 1.5,\n    \"satuan\": \"km\",\n    \"icon\": \"road.png\",\n    \"icon2\": null,\n    \"icon3\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('indikator_id', json.data.id);",
+                  "        console.log('Saved indikator_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Indikator",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/indikator/{{indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator",
+                "{{indikator_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Indikator berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Infrastruktur Jalan & Jembatan\",\n    \"bobot\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Indikator",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/indikator/{{indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator",
+                "{{indikator_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Indikator berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Indikator",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/indikator/{{indikator_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "indikator",
+                "{{indikator_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Indikator yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Indikator/kategori dampak bencana yang dipantau (mis. infrastruktur jalan, rumah, sekolah), berbentuk pohon lewat `kode` & `parent_kode`."
+    },
+    {
+      "name": "Pelaksana",
+      "item": [
+        {
+          "name": "List Pelaksana",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Pelaksana.\n\nInstansi/lembaga pelaksana rehabilitasi dan rekonstruksi.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Pelaksana",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana/{{pelaksana_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana",
+                "{{pelaksana_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Pelaksana berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Pelaksana",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pelaksana",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana"
+              ]
+            },
+            "description": "Membuat data Pelaksana baru.\n\nInstansi/lembaga pelaksana rehabilitasi dan rekonstruksi.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Badan Nasional Penanggulangan Bencana\",\n    \"singkatan\": \"BNPB\",\n    \"keterangan\": \"Pelaksana rehabilitasi dan rekonstruksi tingkat nasional\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('pelaksana_id', json.data.id);",
+                  "        console.log('Saved pelaksana_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Pelaksana",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pelaksana/{{pelaksana_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana",
+                "{{pelaksana_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Pelaksana berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"keterangan\": \"Pelaksana utama rehabilitasi dan rekonstruksi pascabencana\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Pelaksana",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana/{{pelaksana_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana",
+                "{{pelaksana_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Pelaksana berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Pelaksana",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana/{{pelaksana_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana",
+                "{{pelaksana_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Pelaksana yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Instansi/lembaga pelaksana rehabilitasi dan rekonstruksi."
+    },
+    {
+      "name": "Pelaksana Indikator",
+      "item": [
+        {
+          "name": "List Pelaksana Indikator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Pelaksana Indikator.\n\nTabel pivot yang menghubungkan Pelaksana dengan Indikator yang menjadi tanggung jawabnya.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Pelaksana Indikator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator/{{pelaksana_indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator",
+                "{{pelaksana_indikator_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Pelaksana Indikator berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Pelaksana Indikator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator"
+              ]
+            },
+            "description": "Membuat data Pelaksana Indikator baru.\n\nTabel pivot yang menghubungkan Pelaksana dengan Indikator yang menjadi tanggung jawabnya.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"indikator_id\": \"{{indikator_id}}\",\n    \"pelaksana_id\": \"{{pelaksana_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('pelaksana_indikator_id', json.data.id);",
+                  "        console.log('Saved pelaksana_indikator_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Pelaksana Indikator",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator/{{pelaksana_indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator",
+                "{{pelaksana_indikator_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Pelaksana Indikator berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"pelaksana_id\": \"{{pelaksana_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Pelaksana Indikator",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator/{{pelaksana_indikator_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator",
+                "{{pelaksana_indikator_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Pelaksana Indikator berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Pelaksana Indikator",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pelaksana_indikator/{{pelaksana_indikator_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pelaksana_indikator",
+                "{{pelaksana_indikator_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Pelaksana Indikator yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Tabel pivot yang menghubungkan Pelaksana dengan Indikator yang menjadi tanggung jawabnya."
+    },
+    {
+      "name": "Sektor Terdampak",
+      "item": [
+        {
+          "name": "List Sektor Terdampak",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Sektor Terdampak.\n\nSektor/lokasi yang terdampak bencana untuk sebuah wilayah & indikator tertentu.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Sektor Terdampak",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak/{{sektor_terdampak_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak",
+                "{{sektor_terdampak_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Sektor Terdampak berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Sektor Terdampak",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak"
+              ]
+            },
+            "description": "Membuat data Sektor Terdampak baru.\n\nSektor/lokasi yang terdampak bencana untuk sebuah wilayah & indikator tertentu.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"wilayah_id\": \"{{wilayah_id}}\",\n    \"indikator_id\": \"{{indikator_id}}\",\n    \"kondisi_awal\": \"Jalan retak sepanjang 2 km akibat gempa\",\n    \"keterangan\": \"Perlu perbaikan segera untuk akses logistik\",\n    \"batas_waktu\": \"2026-12-31\",\n    \"foto_sebelum\": null,\n    \"foto_sesudah\": null,\n    \"latitude\": \"-0.789275\",\n    \"longitude\": \"100.650223\",\n    \"kondisi\": \"Rusak Berat\",\n    \"status\": \"Belum Ditangani\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('sektor_terdampak_id', json.data.id);",
+                  "        console.log('Saved sektor_terdampak_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Sektor Terdampak",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak/{{sektor_terdampak_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak",
+                "{{sektor_terdampak_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Sektor Terdampak berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"Dalam Perbaikan\",\n    \"kondisi\": \"Rusak Sedang\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Sektor Terdampak",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak/{{sektor_terdampak_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak",
+                "{{sektor_terdampak_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Sektor Terdampak berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Sektor Terdampak",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak/{{sektor_terdampak_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak",
+                "{{sektor_terdampak_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Sektor Terdampak yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Sektor/lokasi yang terdampak bencana untuk sebuah wilayah & indikator tertentu."
+    },
+    {
+      "name": "Sektor Terdampak Detail",
+      "item": [
+        {
+          "name": "List Sektor Terdampak Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Sektor Terdampak Detail.\n\nTitik detail (koordinat) dari sebuah Sektor Terdampak.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Sektor Terdampak Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail/{{sektor_terdampak_detail_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail",
+                "{{sektor_terdampak_detail_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Sektor Terdampak Detail berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Sektor Terdampak Detail",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail"
+              ]
+            },
+            "description": "Membuat data Sektor Terdampak Detail baru.\n\nTitik detail (koordinat) dari sebuah Sektor Terdampak.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sektor_terdampak_id\": \"{{sektor_terdampak_id}}\",\n    \"keterangan\": \"Titik longsor di km 12 ruas jalan Painan-Tapan\",\n    \"latitude\": \"-1.373000\",\n    \"longitude\": \"100.567800\",\n    \"foto\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('sektor_terdampak_detail_id', json.data.id);",
+                  "        console.log('Saved sektor_terdampak_detail_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Sektor Terdampak Detail",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail/{{sektor_terdampak_detail_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail",
+                "{{sektor_terdampak_detail_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Sektor Terdampak Detail berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"keterangan\": \"Titik longsor sudah mulai ditangani tim darurat\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Sektor Terdampak Detail",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail/{{sektor_terdampak_detail_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail",
+                "{{sektor_terdampak_detail_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Sektor Terdampak Detail berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Sektor Terdampak Detail",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sektor_terdampak_detail/{{sektor_terdampak_detail_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sektor_terdampak_detail",
+                "{{sektor_terdampak_detail_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Sektor Terdampak Detail yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Titik detail (koordinat) dari sebuah Sektor Terdampak."
+    },
+    {
+      "name": "Perbaikan",
+      "item": [
+        {
+          "name": "List Perbaikan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/perbaikan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Perbaikan.\n\nRiwayat/progres perbaikan atas Sektor Terdampak (dan opsional detail titiknya).\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Perbaikan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/perbaikan/{{perbaikan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan",
+                "{{perbaikan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Perbaikan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Perbaikan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/perbaikan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan"
+              ]
+            },
+            "description": "Membuat data Perbaikan baru.\n\nRiwayat/progres perbaikan atas Sektor Terdampak (dan opsional detail titiknya).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sektor_terdampak_id\": \"{{sektor_terdampak_id}}\",\n    \"sektor_terdampak_detail_id\": \"{{sektor_terdampak_detail_id}}\",\n    \"tanggal\": \"2026-08-15\",\n    \"jumlah\": 1,\n    \"pelapor\": \"Tim Tanggap Darurat Wilayah III\",\n    \"foto\": null,\n    \"keterangan\": \"Perbaikan sementara akses jalan menggunakan alat berat\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('perbaikan_id', json.data.id);",
+                  "        console.log('Saved perbaikan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Perbaikan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/perbaikan/{{perbaikan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan",
+                "{{perbaikan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Perbaikan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"jumlah\": 2,\n    \"keterangan\": \"Perbaikan permanen selesai dilaksanakan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Perbaikan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/perbaikan/{{perbaikan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan",
+                "{{perbaikan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Perbaikan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Perbaikan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/perbaikan/{{perbaikan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "perbaikan",
+                "{{perbaikan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Perbaikan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Riwayat/progres perbaikan atas Sektor Terdampak (dan opsional detail titiknya)."
+    },
+    {
+      "name": "Masalah Kritis",
+      "item": [
+        {
+          "name": "List Masalah Kritis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Masalah Kritis.\n\nCatatan masalah kritis/darurat di suatu wilayah terkait sebuah indikator.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Masalah Kritis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis/{{masalah_kritis_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis",
+                "{{masalah_kritis_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Masalah Kritis berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Masalah Kritis",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis"
+              ]
+            },
+            "description": "Membuat data Masalah Kritis baru.\n\nCatatan masalah kritis/darurat di suatu wilayah terkait sebuah indikator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"indikator_id\": \"{{indikator_id}}\",\n    \"wilayah_id\": \"{{wilayah_id}}\",\n    \"pelaksana_id\": \"{{pelaksana_id}}\",\n    \"keterangan\": \"12 desa masih terisolasi akibat jalan terputus\",\n    \"jumlah\": 12,\n    \"satuan\": \"desa\",\n    \"foto\": null,\n    \"foto_sesudah\": null,\n    \"latitude\": \"-0.947100\",\n    \"longitude\": \"100.417200\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('masalah_kritis_id', json.data.id);",
+                  "        console.log('Saved masalah_kritis_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Masalah Kritis",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis/{{masalah_kritis_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis",
+                "{{masalah_kritis_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Masalah Kritis berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"jumlah\": 8,\n    \"keterangan\": \"8 desa masih terisolasi, 4 desa sudah dapat diakses\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Masalah Kritis",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis/{{masalah_kritis_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis",
+                "{{masalah_kritis_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Masalah Kritis berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Masalah Kritis",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/masalah_kritis/{{masalah_kritis_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "masalah_kritis",
+                "{{masalah_kritis_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Masalah Kritis yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Catatan masalah kritis/darurat di suatu wilayah terkait sebuah indikator."
+    },
+    {
+      "name": "Kategori Paket Pekerjaan",
+      "item": [
+        {
+          "name": "List Kategori Paket Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Kategori Paket Pekerjaan.\n\nKategori/klasifikasi dari sebuah Paket Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Kategori Paket Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan/{{kategori_paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan",
+                "{{kategori_paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Kategori Paket Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Kategori Paket Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Kategori Paket Pekerjaan baru.\n\nKategori/klasifikasi dari sebuah Paket Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Rehabilitasi Jalan\",\n    \"icon\": \"road-icon.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('kategori_paket_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved kategori_paket_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Kategori Paket Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan/{{kategori_paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan",
+                "{{kategori_paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Kategori Paket Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Rehabilitasi Jalan & Jembatan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Kategori Paket Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan/{{kategori_paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan",
+                "{{kategori_paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Kategori Paket Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Kategori Paket Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kategori_paket_pekerjaan/{{kategori_paket_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "kategori_paket_pekerjaan",
+                "{{kategori_paket_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Kategori Paket Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Kategori/klasifikasi dari sebuah Paket Pekerjaan."
+    },
+    {
+      "name": "Penyedia",
+      "item": [
+        {
+          "name": "List Penyedia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/penyedia?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Penyedia.\n\nData penyedia/kontraktor pelaksana Paket Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Penyedia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/penyedia/{{penyedia_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia",
+                "{{penyedia_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Penyedia berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Penyedia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/penyedia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia"
+              ]
+            },
+            "description": "Membuat data Penyedia baru.\n\nData penyedia/kontraktor pelaksana Paket Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"PT Karya Bangun Nusantara\",\n    \"nib\": \"1234567890123\",\n    \"npwp\": \"01.234.567.8-901.000\",\n    \"kontak_person\": \"Andi Saputra\",\n    \"email\": \"kontak@karyabangun.co.id\",\n    \"notelp\": \"0751-1234567\",\n    \"alamat\": \"Jl. Sudirman No. 45, Padang\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('penyedia_id', json.data.id);",
+                  "        console.log('Saved penyedia_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Penyedia",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/penyedia/{{penyedia_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia",
+                "{{penyedia_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Penyedia berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"kontak_person\": \"Budi Hartono\",\n    \"notelp\": \"0751-7654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Penyedia",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/penyedia/{{penyedia_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia",
+                "{{penyedia_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Penyedia berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Penyedia",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/penyedia/{{penyedia_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "penyedia",
+                "{{penyedia_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Penyedia yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Data penyedia/kontraktor pelaksana Paket Pekerjaan."
+    },
+    {
+      "name": "Paket Pekerjaan",
+      "item": [
+        {
+          "name": "List Paket Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Paket Pekerjaan.\n\nPaket pekerjaan rehabilitasi/rekonstruksi pada suatu wilayah. Endpoint `update` juga menerima file `video`/`file_video` (mp4, maks 50MB) lewat multipart form-data.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Paket Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan/{{paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan",
+                "{{paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Paket Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Paket Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Paket Pekerjaan baru.\n\nPaket pekerjaan rehabilitasi/rekonstruksi pada suatu wilayah. Endpoint `update` juga menerima file `video`/`file_video` (mp4, maks 50MB) lewat multipart form-data.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"wilayah_id\": \"{{wilayah_id}}\",\n    \"provinsi_id\": \"{{wilayah_id}}\",\n    \"kabupaten_id\": \"{{wilayah_id}}\",\n    \"pelaksana_id\": \"{{pelaksana_id}}\",\n    \"indikator_id\": \"{{indikator_id}}\",\n    \"kategori_paket_pekerjaan_id\": \"{{kategori_paket_pekerjaan_id}}\",\n    \"penyedia_id\": \"{{penyedia_id}}\",\n    \"nama\": \"Rehabilitasi Ruas Jalan Painan - Tapan\",\n    \"nominal\": 2500000000,\n    \"keterangan\": \"Perbaikan jalan nasional yang terputus akibat gempa\",\n    \"latitude\": \"-1.373000\",\n    \"longitude\": \"100.567800\",\n    \"tahun_anggaran\": \"2026\",\n    \"nama_program\": \"Program Rehabilitasi dan Rekonstruksi Pascabencana\",\n    \"nama_kegiatan\": \"Rehabilitasi Jalan dan Jembatan\",\n    \"nama_sub_kegiatan\": \"Rehabilitasi Jalan Provinsi\",\n    \"nama_rekening\": \"Belanja Modal Jalan\",\n    \"pagu_dana\": 2600000000,\n    \"no_kontrak\": \"027/KONTRAK/DPUPR/2026\",\n    \"nama_paket\": \"Rehabilitasi Ruas Jalan Painan - Tapan Segmen 1\",\n    \"jenis_pengadaan\": \"Pekerjaan Konstruksi\",\n    \"model_pengadaan\": \"Tender\",\n    \"tanggal_kontrak\": \"2026-08-01\",\n    \"tanggal_selesai\": \"2026-12-15\",\n    \"nilai_pagu\": 2600000000,\n    \"nilai_kontrak\": 2500000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('paket_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved paket_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Paket Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan/{{paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan",
+                "{{paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Paket Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"no_kontrak\": \"027/KONTRAK/DPUPR/2026-REV1\",\n    \"nilai_kontrak\": 2450000000,\n    \"tanggal_selesai\": \"2026-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Paket Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan/{{paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan",
+                "{{paket_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Paket Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Paket Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan/{{paket_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan",
+                "{{paket_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Paket Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Paket Pekerjaan (Upload Video)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-HTTP-Method-Override",
+                "value": "PUT"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/paket_pekerjaan/{{paket_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "paket_pekerjaan",
+                "{{paket_pekerjaan_id}}"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "_method",
+                  "value": "PUT",
+                  "type": "text",
+                  "description": "Method spoofing, karena PHP tidak mem-parsing body multipart pada request PUT asli."
+                },
+                {
+                  "key": "nama",
+                  "value": "Rehabilitasi Ruas Jalan Painan - Tapan",
+                  "type": "text"
+                },
+                {
+                  "key": "file_video",
+                  "type": "file",
+                  "src": [],
+                  "description": "File video mp4, maksimal 50MB. Field wajib `file_video` (tersimpan di storage/file_video). Jangan pakai `video`."
+                }
+              ]
+            },
+            "description": "Contoh update Paket Pekerjaan sekaligus upload file video dokumentasi (field `file_video`, mp4 maks 50MB). Dikirim sebagai POST + `_method=PUT` (method spoofing) karena PHP tidak mem-parsing body `multipart/form-data` pada request PUT asli. File tersimpan di storage/file_video."
+          },
+          "response": []
+        }
+      ],
+      "description": "Paket pekerjaan rehabilitasi/rekonstruksi pada suatu wilayah. Endpoint `update` juga menerima file `video`/`file_video` (mp4, maks 50MB) lewat multipart form-data."
+    },
+    {
+      "name": "Rincian Pekerjaan",
+      "item": [
+        {
+          "name": "List Rincian Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Rincian Pekerjaan.\n\nRincian item pekerjaan (dengan bobot %) dari sebuah Paket Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Rincian Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan/{{rincian_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan",
+                "{{rincian_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Rincian Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Rincian Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Rincian Pekerjaan baru.\n\nRincian item pekerjaan (dengan bobot %) dari sebuah Paket Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"paket_pekerjaan_id\": \"{{paket_pekerjaan_id}}\",\n    \"nama\": \"Pengaspalan Jalan\",\n    \"satuan\": \"m2\",\n    \"bobot\": 35.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('rincian_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved rincian_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Rincian Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan/{{rincian_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan",
+                "{{rincian_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Rincian Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"bobot\": 40\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Rincian Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan/{{rincian_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan",
+                "{{rincian_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Rincian Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Rincian Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rincian_pekerjaan/{{rincian_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rincian_pekerjaan",
+                "{{rincian_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Rincian Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Rincian item pekerjaan (dengan bobot %) dari sebuah Paket Pekerjaan."
+    },
+    {
+      "name": "Timeline Pekerjaan",
+      "item": [
+        {
+          "name": "List Timeline Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Timeline Pekerjaan.\n\nTarget jadwal pelaksanaan sebuah Rincian Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Timeline Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan/{{timeline_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan",
+                "{{timeline_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Timeline Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Timeline Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Timeline Pekerjaan baru.\n\nTarget jadwal pelaksanaan sebuah Rincian Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"rincian_pekerjaan_id\": \"{{rincian_pekerjaan_id}}\",\n    \"tanggal_awal\": \"2026-09-01\",\n    \"tanggal_akhir\": \"2026-09-30\",\n    \"target\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('timeline_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved timeline_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Timeline Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan/{{timeline_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan",
+                "{{timeline_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Timeline Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tanggal_akhir\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Timeline Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan/{{timeline_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan",
+                "{{timeline_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Timeline Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Timeline Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/timeline_pekerjaan/{{timeline_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "timeline_pekerjaan",
+                "{{timeline_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Timeline Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Target jadwal pelaksanaan sebuah Rincian Pekerjaan."
+    },
+    {
+      "name": "Realisasi Pekerjaan",
+      "item": [
+        {
+          "name": "List Realisasi Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Realisasi Pekerjaan.\n\nRealisasi progres (keuangan/fisik) dari sebuah Rincian Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Realisasi Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan/{{realisasi_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan",
+                "{{realisasi_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Realisasi Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Realisasi Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Realisasi Pekerjaan baru.\n\nRealisasi progres (keuangan/fisik) dari sebuah Rincian Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"rincian_pekerjaan_id\": \"{{rincian_pekerjaan_id}}\",\n    \"tanggal\": \"2026-09-15\",\n    \"realisasi\": 55,\n    \"realisasi_fisik\": 55.75\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('realisasi_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved realisasi_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Realisasi Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan/{{realisasi_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan",
+                "{{realisasi_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Realisasi Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"realisasi\": 80,\n    \"realisasi_fisik\": 80.25\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Realisasi Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan/{{realisasi_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan",
+                "{{realisasi_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Realisasi Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Realisasi Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/realisasi_pekerjaan/{{realisasi_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "realisasi_pekerjaan",
+                "{{realisasi_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Realisasi Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Realisasi progres (keuangan/fisik) dari sebuah Rincian Pekerjaan."
+    },
+    {
+      "name": "Pembayaran Pekerjaan",
+      "item": [
+        {
+          "name": "List Pembayaran Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Pembayaran Pekerjaan.\n\nRiwayat pembayaran/termin dari sebuah Paket Pekerjaan.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Pembayaran Pekerjaan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan/{{pembayaran_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan",
+                "{{pembayaran_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Pembayaran Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Pembayaran Pekerjaan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan"
+              ]
+            },
+            "description": "Membuat data Pembayaran Pekerjaan baru.\n\nRiwayat pembayaran/termin dari sebuah Paket Pekerjaan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"paket_pekerjaan_id\": \"{{paket_pekerjaan_id}}\",\n    \"tanggal\": \"2026-09-20\",\n    \"nominal\": 250000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('pembayaran_pekerjaan_id', json.data.id);",
+                  "        console.log('Saved pembayaran_pekerjaan_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Pembayaran Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan/{{pembayaran_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan",
+                "{{pembayaran_pekerjaan_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Pembayaran Pekerjaan berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nominal\": 300000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Pembayaran Pekerjaan",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan/{{pembayaran_pekerjaan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan",
+                "{{pembayaran_pekerjaan_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Pembayaran Pekerjaan berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Pembayaran Pekerjaan",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pembayaran_pekerjaan/{{pembayaran_pekerjaan_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pembayaran_pekerjaan",
+                "{{pembayaran_pekerjaan_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Pembayaran Pekerjaan yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Riwayat pembayaran/termin dari sebuah Paket Pekerjaan."
+    },
+    {
+      "name": "Anggaran Daerah",
+      "item": [
+        {
+          "name": "List Anggaran Daerah",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Anggaran Daerah.\n\nAnggaran rehabilitasi & rekonstruksi per wilayah untuk tahun 2025 & 2026.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Anggaran Daerah",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah/{{anggaran_daerah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah",
+                "{{anggaran_daerah_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Anggaran Daerah berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Anggaran Daerah",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah"
+              ]
+            },
+            "description": "Membuat data Anggaran Daerah baru.\n\nAnggaran rehabilitasi & rekonstruksi per wilayah untuk tahun 2025 & 2026.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"wilayah_id\": \"{{wilayah_id}}\",\n    \"anggaran_2025\": 5000000000,\n    \"anggaran_2026\": 7500000000,\n    \"penyesuaian\": 250000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('anggaran_daerah_id', json.data.id);",
+                  "        console.log('Saved anggaran_daerah_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Anggaran Daerah",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah/{{anggaran_daerah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah",
+                "{{anggaran_daerah_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Anggaran Daerah berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"anggaran_2026\": 8000000000,\n    \"penyesuaian\": 300000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Anggaran Daerah",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah/{{anggaran_daerah_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah",
+                "{{anggaran_daerah_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Anggaran Daerah berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Anggaran Daerah",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/anggaran_daerah/{{anggaran_daerah_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "anggaran_daerah",
+                "{{anggaran_daerah_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Anggaran Daerah yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Anggaran rehabilitasi & rekonstruksi per wilayah untuk tahun 2025 & 2026."
+    },
+    {
+      "name": "Alokasi Anggaran",
+      "item": [
+        {
+          "name": "List Alokasi Anggaran",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar Alokasi Anggaran.\n\nAlokasi/rincian penggunaan dari sebuah Anggaran Daerah.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Alokasi Anggaran",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran/{{alokasi_anggaran_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran",
+                "{{alokasi_anggaran_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data Alokasi Anggaran berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Alokasi Anggaran",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran"
+              ]
+            },
+            "description": "Membuat data Alokasi Anggaran baru.\n\nAlokasi/rincian penggunaan dari sebuah Anggaran Daerah.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"anggaran_daerah_id\": \"{{anggaran_daerah_id}}\",\n    \"keterangan\": \"Alokasi rehabilitasi jalan kabupaten\",\n    \"nominal\": 1500000000,\n    \"nama_realisasi\": \"Rehabilitasi Ruas Jalan Painan-Tapan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('alokasi_anggaran_id', json.data.id);",
+                  "        console.log('Saved alokasi_anggaran_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Alokasi Anggaran",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran/{{alokasi_anggaran_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran",
+                "{{alokasi_anggaran_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data Alokasi Anggaran berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nominal\": 1750000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Alokasi Anggaran",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran/{{alokasi_anggaran_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran",
+                "{{alokasi_anggaran_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data Alokasi Anggaran berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Alokasi Anggaran",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/alokasi_anggaran/{{alokasi_anggaran_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alokasi_anggaran",
+                "{{alokasi_anggaran_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data Alokasi Anggaran yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Alokasi/rincian penggunaan dari sebuah Anggaran Daerah."
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "List User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user?paginate=10&limit=10&skip=0&with=wilayah,indikator&flag_trash=1&is_trash=1&count=1&sum=nominal&first=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user"
+              ],
+              "query": [
+                {
+                  "key": "paginate",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Jumlah data per halaman. Jika diisi, response berbentuk laravel paginator."
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true,
+                  "description": "Batasi jumlah data yang dikembalikan."
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Lewati N data pertama (offset)."
+                },
+                {
+                  "key": "with",
+                  "value": "wilayah,indikator",
+                  "disabled": true,
+                  "description": "Eager load relasi, pisahkan dengan koma."
+                },
+                {
+                  "key": "flag_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "-1 = hanya data terhapus (trashed), 1 = termasuk data terhapus."
+                },
+                {
+                  "key": "is_trash",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya menampilkan data yang sudah di-soft-delete."
+                },
+                {
+                  "key": "count",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, response berupa jumlah data (integer)."
+                },
+                {
+                  "key": "sum",
+                  "value": "nominal",
+                  "disabled": true,
+                  "description": "Jika diisi nama kolom, response berupa total penjumlahan kolom tsb."
+                },
+                {
+                  "key": "first",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "Jika diisi, hanya mengembalikan data pertama (bukan array)."
+                }
+              ]
+            },
+            "description": "Menampilkan daftar User.\n\nPengguna aplikasi (admin/operator). Nilai `akses` yang dipakai: `Super Admin`, `Admin`, `Operator`.\n\nMendukung query parameter umum (lihat tab Params, sebagian besar dinonaktifkan secara default)."
+          },
+          "response": []
+        },
+        {
+          "name": "Detail User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Menampilkan detail satu data User berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user"
+              ]
+            },
+            "description": "Membuat data User baru.\n\nPengguna aplikasi (admin/operator). Nilai `akses` yang dipakai: `Super Admin`, `Admin`, `Operator`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Operator Wilayah Sumbar\",\n    \"email\": \"operator.sumbar@geopas.test\",\n    \"password\": \"password123\",\n    \"akses\": \"Operator\",\n    \"wilayah_id\": \"{{wilayah_id}}\",\n    \"pelaksana_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    if (json.success && json.data && json.data.id) {",
+                  "        pm.collection.variables.set('user_id', json.data.id);",
+                  "        console.log('Saved user_id =', json.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Memperbarui sebagian/seluruh field data User berdasarkan id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nama\": \"Operator Wilayah Sumbar (Updated)\",\n    \"akses\": \"Admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Menghapus (soft delete jika model mendukungnya) data User berdasarkan id."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore User",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}/restore",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "{{user_id}}",
+                "restore"
+              ]
+            },
+            "description": "Mengembalikan data User yang sudah dihapus (soft delete)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Pengguna aplikasi (admin/operator). Nilai `akses` yang dipakai: `Super Admin`, `Admin`, `Operator`."
+    },
+    {
+      "name": "Excel Template",
+      "item": [
+        {
+          "name": "List Wilayah (by scope)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/wilayah/{{scope}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "wilayah",
+                "{{scope}}"
+              ]
+            },
+            "description": "Menghasilkan file/template excel daftar wilayah untuk `scope` tertentu (mis. `provinsi`, atau kode wilayah induk).",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Wilayah (by scope & children)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/wilayah/{{scope}}/{{children}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "wilayah",
+                "{{scope}}",
+                "{{children}}"
+              ]
+            },
+            "description": "Sama seperti di atas namun dengan tambahan parameter `children` (mis. level wilayah anak yang ingin ditampilkan).",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Indikator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/indikator",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "indikator"
+              ]
+            },
+            "description": "Menghasilkan file/template excel daftar Indikator.",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Pelaksana",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/pelaksana",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "pelaksana"
+              ]
+            },
+            "description": "Menghasilkan file/template excel daftar Pelaksana.",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Kategori Paket",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/kategori_paket",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "kategori_paket"
+              ]
+            },
+            "description": "Menghasilkan file/template excel daftar Kategori Paket Pekerjaan.",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Daftar Penyedia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/excel/daftar_penyedia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "excel",
+                "daftar_penyedia"
+              ]
+            },
+            "description": "Menghasilkan file/template excel daftar Penyedia.",
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "aingExcel",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "machinegunkelly",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoint pembangkit template/daftar excel. Menggunakan HTTP Basic Auth (bukan Bearer token) dengan kredensial tetap `aingExcel` / `machinegunkelly` (lihat `App\\Http\\Middleware\\ExcelTemplateAuth`)."
+    }
+  ]
+}

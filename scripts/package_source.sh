@@ -23,6 +23,7 @@ INCLUDE=(
   "build_windows.spec"
   "build_macos.spec"
   "config.json"
+  "logo-geopas.png"
   "requirements.txt"
   "pytest.ini"
   ".gitignore"

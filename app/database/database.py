@@ -55,6 +55,19 @@ class Database:
                 """
             )
             conn.commit()
+            self._migrate_columns(conn)
+
+    def _migrate_columns(self, conn: sqlite3.Connection) -> None:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
+        additions = {
+            "geopas_paket_id": "INTEGER",
+            "geopas_paket_nama": "TEXT DEFAULT ''",
+            "batch_source": "TEXT DEFAULT ''",
+        }
+        for name, ddl in additions.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
+        conn.commit()
 
     def clear_jobs(self) -> None:
         with self._connect() as conn:
@@ -68,8 +81,9 @@ class Database:
                 INSERT INTO jobs (
                     source_path, output_path, duration, original_size, output_size,
                     video_bitrate, resolution, status, progress, attempt, error,
-                    created_at, started_at, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, started_at, completed_at,
+                    geopas_paket_id, geopas_paket_nama, batch_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.source_path,
@@ -86,6 +100,9 @@ class Database:
                     job.created_at,
                     job.started_at,
                     job.completed_at,
+                    job.geopas_paket_id,
+                    job.geopas_paket_nama,
+                    job.batch_source,
                 ),
             )
             conn.commit()
@@ -101,7 +118,8 @@ class Database:
                     source_path=?, output_path=?, duration=?, original_size=?,
                     output_size=?, video_bitrate=?, resolution=?, status=?,
                     progress=?, attempt=?, error=?, created_at=?, started_at=?,
-                    completed_at=?
+                    completed_at=?, geopas_paket_id=?, geopas_paket_nama=?,
+                    batch_source=?
                 WHERE id=?
                 """,
                 (
@@ -119,6 +137,9 @@ class Database:
                     job.created_at,
                     job.started_at,
                     job.completed_at,
+                    job.geopas_paket_id,
+                    job.geopas_paket_nama,
+                    job.batch_source,
                     job.id,
                 ),
             )
@@ -145,7 +166,8 @@ class Database:
                 """
                 SELECT COUNT(*) AS c FROM jobs
                 WHERE status IN ('PENDING', 'FAILED', 'CANCELLED',
-                                 'ANALYZING', 'COMPRESSING', 'VALIDATING')
+                                 'ANALYZING', 'COMPRESSING', 'VALIDATING',
+                                 'UPLOADING', 'UPLOAD_FAILED')
                 """
             ).fetchone()
         return int(row["c"]) if row else 0
@@ -160,11 +182,44 @@ class Database:
                 WHERE status IN ('ANALYZING', 'COMPRESSING', 'VALIDATING')
                 """
             )
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status='COMPLETED'
+                WHERE status='UPLOADING'
+                """
+            )
+            conn.commit()
+            return int(cur.rowcount)
+
+    def delete_jobs_for_batch(
+        self, batch_source: str, paket_id: Optional[int]
+    ) -> int:
+        with self._connect() as conn:
+            if paket_id is None:
+                cur = conn.execute(
+                    """
+                    DELETE FROM jobs
+                    WHERE batch_source=? AND geopas_paket_id IS NULL
+                    """,
+                    (batch_source,),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    DELETE FROM jobs
+                    WHERE batch_source=? AND geopas_paket_id=?
+                    """,
+                    (batch_source, paket_id),
+                )
             conn.commit()
             return int(cur.rowcount)
 
     @staticmethod
     def _row_to_job(row: sqlite3.Row) -> Job:
+        keys = set(row.keys())
+        paket_raw = row["geopas_paket_id"] if "geopas_paket_id" in keys else None
+        paket_id = int(paket_raw) if paket_raw not in (None, "") else None
         return Job(
             id=row["id"],
             source_path=row["source_path"],
@@ -181,4 +236,13 @@ class Database:
             created_at=row["created_at"],
             started_at=row["started_at"],
             completed_at=row["completed_at"],
+            geopas_paket_id=paket_id,
+            geopas_paket_nama=(
+                str(row["geopas_paket_nama"] or "")
+                if "geopas_paket_nama" in keys
+                else ""
+            ),
+            batch_source=(
+                str(row["batch_source"] or "") if "batch_source" in keys else ""
+            ),
         )

@@ -10,7 +10,7 @@ from app.models.job import Job, JobStatus
 
 
 class JobTable(QTableWidget):
-    COLUMNS = ("File", "Status", "Progress", "Original", "Output", "Error")
+    COLUMNS = ("File", "Paket", "Status", "Progress", "Original", "Output", "Error")
 
     def __init__(self, parent=None) -> None:
         super().__init__(0, len(self.COLUMNS), parent)
@@ -19,7 +19,8 @@ class JobTable(QTableWidget):
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         self.setAlternatingRowColors(True)
         self._row_by_id: dict[int, int] = {}
 
@@ -37,8 +38,12 @@ class JobTable(QTableWidget):
             if job.id is not None:
                 self._row_by_id[job.id] = row
 
+        paket = job.geopas_paket_nama or (
+            f"#{job.geopas_paket_id}" if job.geopas_paket_id else "—"
+        )
         values = [
             Path(job.source_path).name,
+            paket,
             job.status.value,
             f"{job.progress:.0f}%",
             f"{bytes_to_mb(job.original_size):.1f} MB" if job.original_size else "—",
@@ -47,10 +52,14 @@ class JobTable(QTableWidget):
         ]
         for col, text in enumerate(values):
             item = QTableWidgetItem(text)
-            if col in (2, 3, 4):
+            if col in (3, 4, 5):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if job.status == JobStatus.FAILED:
                 item.setForeground(Qt.GlobalColor.red)
             elif job.status == JobStatus.COMPLETED:
                 item.setForeground(Qt.GlobalColor.green)
+            elif job.status == JobStatus.UPLOADING:
+                item.setForeground(Qt.GlobalColor.cyan)
+            elif job.status == JobStatus.UPLOAD_FAILED:
+                item.setForeground(Qt.GlobalColor.red)
             self.setItem(row, col, item)

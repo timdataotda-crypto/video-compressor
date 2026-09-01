@@ -17,6 +17,29 @@ QLabel#titleLabel {
     color: #f0f3f7;
 }
 
+QLabel#logoLabel {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+QLabel#fieldLabel {
+    color: #9aa3b2;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+
+QLabel#hintLabel {
+    color: #9aa3b2;
+    font-size: 12px;
+}
+
+QPushButton#iconButton {
+    padding: 6px 8px;
+    min-width: 36px;
+}
+
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     background-color: #252a33;
     border: 1px solid #3a4150;
@@ -25,8 +48,11 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     selection-background-color: #3d7eff;
 }
 
-QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
-    border-color: #5b8cff;
+QComboBox QAbstractItemView, QCompleter QAbstractItemView {
+    background-color: #252a33;
+    color: #e8eaed;
+    selection-background-color: #3d7eff;
+    border: 1px solid #3a4150;
 }
 
 QPushButton {
@@ -57,9 +83,24 @@ QPushButton#startButton:hover {
     background-color: #4580f5;
 }
 
-QPushButton#startButton:disabled {
-    background-color: #3a4150;
-    color: #888;
+QPushButton#lockButton {
+    background-color: #2d4a3e;
+    border: 1px solid #3d6a55;
+}
+
+QPushButton#lockButton:hover {
+    background-color: #365748;
+}
+
+QListWidget#batchList {
+    background-color: #1f242c;
+    border: 1px solid #3a4150;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QListWidget#batchList::item {
+    padding: 6px 8px;
 }
 
 QProgressBar {
@@ -97,7 +138,7 @@ QGroupBox {
     border: 1px solid #3a4150;
     border-radius: 8px;
     margin-top: 12px;
-    padding-top: 8px;
+    padding: 14px 10px 12px 10px;
 }
 
 QGroupBox::title {

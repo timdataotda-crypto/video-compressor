@@ -13,6 +13,7 @@ root = Path(SPECPATH).resolve()
 
 datas = [
     (str(root / "config.json"), "."),
+    (str(root / "logo-geopas.png"), "."),
     (str(root / "app" / "ui" / "styles.qss"), "app/ui"),
 ]
 
@@ -43,6 +44,7 @@ a = Analysis(
         "app.cli",
         "app.ui.main_window",
         "app.core.compressor",
+        "app.geopas.client",
         "app.ffmpeg.ffmpeg",
         "app.ffmpeg.ffprobe",
     ],
@@ -95,8 +97,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "Drone Compressor",
         "CFBundleDisplayName": "Drone Compressor",
-        "CFBundleShortVersionString": "0.1.0",
-        "CFBundleVersion": "0.1.0",
+        "CFBundleShortVersionString": "0.2.0",
+        "CFBundleVersion": "0.2.0",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
     },
