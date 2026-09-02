@@ -11,6 +11,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
+import certifi
+
 from app.geopas.models import PaketPekerjaan, Wilayah
 
 _MAX_VIDEO_BYTES = 50 * 1024 * 1024
@@ -281,7 +283,11 @@ class GeopasClient:
             headers.update(extra_headers)
         req = Request(url, data=data, headers=headers, method=method)
         try:
-            with urlopen(req, timeout=timeout or self.timeout) as resp:
+            with urlopen(
+                req,
+                timeout=timeout or self.timeout,
+                context=_ssl_context(),
+            ) as resp:
                 raw = resp.read()
                 status = getattr(resp, "status", 200)
         except HTTPError as exc:
@@ -290,8 +296,8 @@ class GeopasClient:
             raise GeopasError(
                 extract_message(payload, f"HTTP {exc.code} pada {path}")
             ) from exc
-        except URLError as exc:
-            raise GeopasError(f"Tidak dapat terhubung ke Geopas: {exc.reason}") from exc
+        except (URLError, ssl.SSLError, TimeoutError, OSError) as exc:
+            raise GeopasError(_connect_error_message(exc)) from exc
         payload = _decode_json(raw)
         if isinstance(payload, dict) and payload.get("success") is False:
             raise GeopasError(extract_message(payload, f"Permintaan {path} ditolak."))
@@ -331,7 +337,7 @@ class GeopasClient:
                 host,
                 port or 443,
                 timeout=timeout,
-                context=ssl.create_default_context(),
+                context=_ssl_context(),
             )
         else:
             conn = http.client.HTTPConnection(host, port or 80, timeout=timeout)
@@ -350,10 +356,10 @@ class GeopasClient:
             raise GeopasError("Broken pipe: server menutup koneksi saat unggah.") from exc
         except BrokenPipeError as exc:
             raise GeopasError("Broken pipe: server menutup koneksi saat unggah.") from exc
-        except OSError as exc:
+        except (ssl.SSLError, OSError) as exc:
             if getattr(exc, "errno", None) == errno.EPIPE:
                 raise GeopasError("Broken pipe: server menutup koneksi saat unggah.") from exc
-            raise GeopasError(f"Tidak dapat terhubung ke Geopas: {exc}") from exc
+            raise GeopasError(_connect_error_message(exc)) from exc
         finally:
             conn.close()
         payload = _decode_json(raw)
@@ -362,6 +368,30 @@ class GeopasClient:
         if status >= 400:
             raise GeopasError(extract_message(payload, f"HTTP {status} pada {path}"))
         return payload
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """OpenSSL di app PyInstaller tidak memakai Keychain macOS; CA harus dibundle."""
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+def _connect_error_message(exc: BaseException) -> str:
+    reason = getattr(exc, "reason", exc)
+    text = str(reason)
+    lowered = text.lower()
+    if (
+        isinstance(exc, ssl.SSLError)
+        or isinstance(reason, ssl.SSLError)
+        or "certificate_verify_failed" in lowered
+        or ("ssl" in lowered and "certificate" in lowered)
+    ):
+        return (
+            "Tidak dapat terhubung ke Geopas: koneksi SSL gagal "
+            "(sertifikat tidak dapat diverifikasi). "
+            "Pastikan tanggal/jam Mac benar dan jaringan mengizinkan "
+            "https://geopas.satgasprr.go.id"
+        )
+    return f"Tidak dapat terhubung ke Geopas: {reason}"
 
 
 def _extend_unique(

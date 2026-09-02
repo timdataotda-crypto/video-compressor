@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.utils.paths import map_output_path
+from app.utils.paths import _DEFAULTS, map_output_path
 
 
 def test_preserve_structure(tmp_path: Path) -> None:
@@ -36,3 +36,7 @@ def test_flat_output(tmp_path: Path) -> None:
     out_root = tmp_path / "OUT"
     mapped = map_output_path(source_root, src, out_root, preserve_structure=False)
     assert mapped == out_root / "DJI_001.mp4"
+
+
+def test_default_output_destination_is_geopas() -> None:
+    assert _DEFAULTS["output_destination"] == "geopas"

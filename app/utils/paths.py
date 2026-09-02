@@ -92,7 +92,7 @@ _DEFAULTS: dict[str, Any] = {
     "hardware_acceleration": "auto",
     "quality_profile": "balanced",
     "crf_fallback": True,
-    "output_destination": "local",
+    "output_destination": "geopas",
     "geopas_base_url": "https://geopas.satgasprr.go.id/api",
     "geopas_email": "",
     "geopas_password": "",

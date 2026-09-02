@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 block_cipher = None
 root = Path(SPECPATH).resolve()
@@ -23,12 +23,13 @@ for name in ("ffmpeg.exe", "ffprobe.exe"):
         datas.append((str(binary), "bin/windows"))
 
 pyside_datas, pyside_binaries, pyside_hidden = collect_all("PySide6")
+certifi_datas = collect_data_files("certifi")
 
 a = Analysis(
     [str(root / "run_app.py")],
     pathex=[str(root)],
     binaries=pyside_binaries,
-    datas=datas + pyside_datas,
+    datas=datas + pyside_datas + certifi_datas,
     hiddenimports=list(pyside_hidden)
     + [
         "app",
@@ -36,6 +37,7 @@ a = Analysis(
         "app.cli",
         "app.ui.main_window",
         "app.geopas.client",
+        "certifi",
     ],
     hookspath=[],
     hooksconfig={},

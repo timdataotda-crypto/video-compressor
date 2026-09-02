@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import ssl
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 
 from app.geopas.client import (
     GeopasClient,
     GeopasError,
+    _connect_error_message,
     _multipart_bytes,
+    _ssl_context,
     extract_list,
     extract_token,
 )
@@ -84,7 +87,7 @@ def test_list_follows_skip_pages(monkeypatch) -> None:
         def __exit__(self, *args):
             return False
 
-    def fake_urlopen(req, timeout=None):
+    def fake_urlopen(req, timeout=None, **_kwargs):
         from urllib.parse import parse_qs, urlparse
 
         qs = parse_qs(urlparse(req.full_url).query)
@@ -124,7 +127,7 @@ def test_paket_query_uses_single_geo_filter(monkeypatch) -> None:
         def __exit__(self, *args):
             return False
 
-    def fake_urlopen(req, timeout=None):
+    def fake_urlopen(req, timeout=None, **_kwargs):
         seen.append(req.full_url)
         return FakeResp(
             b'{"success":true,"data":[{"id":161,"nama":"Pasar Samalanga",'
@@ -159,7 +162,7 @@ def test_login_and_list(monkeypatch) -> None:
         def __exit__(self, *args):
             return False
 
-    def fake_urlopen(req, timeout=None):
+    def fake_urlopen(req, timeout=None, **_kwargs):
         url = req.full_url
         calls.append(url)
         if url.endswith("/auth/login"):
@@ -194,7 +197,7 @@ def test_http_error_uses_message(monkeypatch) -> None:
         def read(self) -> bytes:
             return b'{"success":false,"message":"Email atau password salah"}'
 
-    def fake_urlopen(req, timeout=None):
+    def fake_urlopen(req, timeout=None, **_kwargs):
         raise Err()
 
     monkeypatch.setattr("app.geopas.client.urlopen", fake_urlopen)
@@ -413,7 +416,7 @@ def test_upload_jobs_marks_upload_failed(tmp_path: Path) -> None:
 
 
 def test_connection_error(monkeypatch) -> None:
-    def fake_urlopen(req, timeout=None):
+    def fake_urlopen(req, timeout=None, **_kwargs):
         raise URLError("timed out")
 
     monkeypatch.setattr("app.geopas.client.urlopen", fake_urlopen)
@@ -423,3 +426,19 @@ def test_connection_error(monkeypatch) -> None:
         raise AssertionError("expected GeopasError")
     except GeopasError as exc:
         assert "Tidak dapat terhubung" in str(exc)
+
+
+def test_ssl_context_uses_bundled_ca() -> None:
+    import certifi
+
+    ctx = _ssl_context()
+    assert isinstance(ctx, ssl.SSLContext)
+    assert Path(certifi.where()).is_file()
+
+
+def test_ssl_error_message() -> None:
+    msg = _connect_error_message(
+        URLError(ssl.SSLError("CERTIFICATE_VERIFY_FAILED"))
+    )
+    assert "SSL" in msg
+    assert "Tidak dapat terhubung" in msg

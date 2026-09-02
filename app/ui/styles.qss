@@ -10,6 +10,47 @@ QMainWindow {
     background-color: #1a1d23;
 }
 
+QScrollArea#mainScroll {
+    background-color: #1a1d23;
+    border: none;
+}
+
+QScrollArea#mainScroll > QWidget > QWidget {
+    background-color: #1a1d23;
+}
+
+QScrollBar:vertical {
+    background: #1a1d23;
+    width: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #3a4150;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #1a1d23;
+    height: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #3a4150;
+    border-radius: 4px;
+    min-width: 24px;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
 QLabel#titleLabel {
     font-size: 20px;
     font-weight: 700;

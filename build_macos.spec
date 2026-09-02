@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 block_cipher = None
 root = Path(SPECPATH).resolve()
@@ -32,12 +32,13 @@ for name in ("ffmpeg", "ffprobe"):
             pass
 
 pyside_datas, pyside_binaries, pyside_hidden = collect_all("PySide6")
+certifi_datas = collect_data_files("certifi")
 
 a = Analysis(
     [str(root / "run_app.py")],
     pathex=[str(root)],
     binaries=pyside_binaries,
-    datas=datas + pyside_datas,
+    datas=datas + pyside_datas + certifi_datas,
     hiddenimports=list(pyside_hidden) + [
         "app",
         "app.main",
@@ -47,6 +48,7 @@ a = Analysis(
         "app.geopas.client",
         "app.ffmpeg.ffmpeg",
         "app.ffmpeg.ffprobe",
+        "certifi",
     ],
     hookspath=[],
     hooksconfig={},
@@ -97,8 +99,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "Drone Compressor",
         "CFBundleDisplayName": "Drone Compressor",
-        "CFBundleShortVersionString": "0.2.1",
-        "CFBundleVersion": "0.2.1",
+        "CFBundleShortVersionString": "0.2.2",
+        "CFBundleVersion": "0.2.2",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
     },

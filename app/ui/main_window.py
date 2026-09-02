@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QCompleter,
     QDoubleSpinBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -125,12 +127,32 @@ class GeopasConnectWorker(QObject):
             self.failed.emit(str(exc))
 
 
+class GeopasTaskWorker(QObject):
+    """Jalankan satu panggilan API Geopas di thread latar."""
+
+    finished = Signal(int, str, object)
+    failed = Signal(int, str, str)
+
+    def __init__(self, token: int, kind: str, fn) -> None:
+        super().__init__()
+        self._token = token
+        self._kind = kind
+        self._fn = fn
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            self.finished.emit(self._token, self._kind, self._fn())
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._token, self._kind, str(exc))
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Drone Compressor")
-        self.resize(1180, 900)
-        self.setMinimumSize(980, 720)
+        self.resize(1100, 780)
+        self.setMinimumSize(720, 520)
         self.setAcceptDrops(True)
 
         self.config = load_config()
@@ -148,6 +170,10 @@ class MainWindow(QMainWindow):
         self._geopas_watchdog = QTimer(self)
         self._geopas_watchdog.setSingleShot(True)
         self._geopas_watchdog.timeout.connect(self._on_geopas_timeout)
+        self._wilayah_token = 0
+        self._paket_token = 0
+        self._pending_search_query = ""
+        self._geopas_tasks: list[tuple[QThread, QObject]] = []
         self._paket_updating = False
         self._paket_search_timer = QTimer(self)
         self._paket_search_timer.setSingleShot(True)
@@ -199,9 +225,9 @@ class MainWindow(QMainWindow):
         return label
 
     def _build_ui(self) -> None:
-        central = QWidget()
-        self.setCentralWidget(central)
-        root = QVBoxLayout(central)
+        content = QWidget()
+        content.setMinimumWidth(700)
+        root = QVBoxLayout(content)
         root.setSpacing(12)
         root.setContentsMargins(20, 16, 20, 16)
 
@@ -216,7 +242,7 @@ class MainWindow(QMainWindow):
 
         form_box = QGroupBox("Folders Target")
         form_box.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         form = QGridLayout(form_box)
         form.setContentsMargins(12, 18, 12, 12)
@@ -310,12 +336,12 @@ class MainWindow(QMainWindow):
         self.lock_source_btn.setObjectName("lockButton")
         self.lock_source_btn.clicked.connect(self.lock_current_source)
         form.addWidget(self.lock_source_btn, 7, 1, 1, 2)
-        form.setRowStretch(8, 1)
 
         self.geopas_box = QGroupBox("Geopas Dalrenduk")
         self.geopas_box.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
+        self.geopas_box.setMinimumWidth(280)
         geopas = QGridLayout(self.geopas_box)
         geopas.setContentsMargins(12, 18, 12, 12)
         geopas.setHorizontalSpacing(10)
@@ -372,7 +398,6 @@ class MainWindow(QMainWindow):
         geopas.addWidget(self.kecamatan_combo, 5, 1, 1, 2)
         geopas.addWidget(self._field_label("PAKET PEKERJAAN"), 6, 0)
         geopas.addWidget(self.paket_combo, 6, 1, 1, 2)
-        geopas.setRowStretch(7, 1)
 
         cards = QHBoxLayout()
         cards.setSpacing(12)
@@ -441,10 +466,20 @@ class MainWindow(QMainWindow):
         root.addWidget(current)
 
         self.job_table = JobTable()
+        self.job_table.setMinimumHeight(180)
         root.addWidget(self.job_table, stretch=1)
 
         self.summary_label = QLabel("Total: 0 | Done: 0 | Failed: 0 | Remaining: 0")
         root.addWidget(self.summary_label)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("mainScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setWidget(content)
+        self.setCentralWidget(scroll)
 
     def _load_styles(self) -> None:
         qss = get_project_root() / "app" / "ui" / "styles.qss"
@@ -489,7 +524,6 @@ class MainWindow(QMainWindow):
 
     def _on_destination_changed(self, _index: int = 0) -> None:
         geopas = self._geopas_mode()
-        self.geopas_box.setVisible(geopas)
         if hasattr(self, "start_btn"):
             self.start_btn.setText("START COMPRESSION")
             if hasattr(self, "send_geopas_btn"):
@@ -510,6 +544,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Geopas", "Isi Geopas API URL di Settings.")
             return
         self._sync_config_from_ui()
+        self._wilayah_token += 1
+        self._paket_token += 1
         self.geopas_connect_btn.setEnabled(False)
         self.geopas_status.setText("Menghubungkan…")
         self._geopas_thread = QThread()
@@ -611,29 +647,27 @@ class MainWindow(QMainWindow):
         query = self.paket_combo.currentText().strip()
         if len(query) < 2 or query.startswith("—") or query.startswith("Tidak ada"):
             return
-        kecamatan = self.kecamatan_combo.currentData()
         kabupaten = self.kabupaten_combo.currentData()
         provinsi = self.provinsi_combo.currentData()
-        try:
-            rows = self._geopas_client.list_paket_pekerjaan(
+        client = self._geopas_client
+        kab_id = kabupaten.id if kabupaten is not None else None
+        prov_id = (
+            None
+            if kabupaten is not None
+            else (provinsi.id if provinsi is not None else None)
+        )
+        self._pending_search_query = query
+        self._paket_token += 1
+        token = self._paket_token
+
+        def _fn() -> list[PaketPekerjaan]:
+            return client.list_paket_pekerjaan(
                 nama=query,
-                kabupaten_id=kabupaten.id if kabupaten is not None else None,
-                provinsi_id=(
-                    None
-                    if kabupaten is not None
-                    else (provinsi.id if provinsi is not None else None)
-                ),
+                kabupaten_id=kab_id,
+                provinsi_id=prov_id,
             )
-        except GeopasError:
-            return
-        if not rows:
-            local = [
-                p
-                for p in self._paket
-                if query.lower() in p.nama.lower() or query in str(p.id)
-            ]
-            rows = local
-        self._fill_paket_combo(rows, keep_text=query)
+
+        self._run_geopas_task(token, "search", _fn)
 
     def _fill_paket_combo(
         self,
@@ -701,37 +735,145 @@ class MainWindow(QMainWindow):
                 self._wilayah.append(item)
                 known.add(item.id)
 
-    def _fetch_children(self, parent: Wilayah) -> list[Wilayah]:
+    def _run_geopas_task(self, token: int, kind: str, fn) -> None:
+        worker = GeopasTaskWorker(token, kind, fn)
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_geopas_task_finished)
+        worker.failed.connect(self._on_geopas_task_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._forget_finished_geopas_tasks)
+        self._geopas_tasks.append((thread, worker))
+        thread.start()
+
+    @Slot()
+    def _forget_finished_geopas_tasks(self) -> None:
+        alive: list[tuple[QThread, QObject]] = []
+        for thread, worker in self._geopas_tasks:
+            try:
+                if thread.isRunning():
+                    alive.append((thread, worker))
+            except RuntimeError:
+                continue
+        self._geopas_tasks = alive
+
+    @Slot(int, str, object)
+    def _on_geopas_task_finished(
+        self, token: int, kind: str, result: object
+    ) -> None:
+        if kind in ("kabupaten", "kecamatan"):
+            if token != self._wilayah_token:
+                return
+            kids = (
+                [item for item in result if isinstance(item, Wilayah)]
+                if isinstance(result, list)
+                else []
+            )
+            self._apply_wilayah_children(kind, kids)
+            self.geopas_status.setStyleSheet("")
+            self.geopas_status.setText(
+                "Wilayah dimuat. Pilih kecamatan, atau ketik nama paket."
+            )
+            return
+        if kind not in ("paket", "search"):
+            return
+        if token != self._paket_token:
+            return
+        rows = (
+            [item for item in result if isinstance(item, PaketPekerjaan)]
+            if isinstance(result, list)
+            else []
+        )
+        keep: str | None = None
+        if kind == "search":
+            keep = self._pending_search_query
+            if not rows and keep:
+                needle = keep.lower()
+                rows = [
+                    p
+                    for p in self._paket
+                    if needle in p.nama.lower() or keep in str(p.id)
+                ]
+        self._fill_paket_combo(rows, keep_text=keep)
+        self.geopas_status.setStyleSheet("")
+        count = len(rows)
+        if kind == "search":
+            self.geopas_status.setText(
+                f"{count} paket ditemukan. Ketik nama untuk mencari lagi."
+            )
+        else:
+            self.geopas_status.setText(
+                f"{count} paket dimuat. Ketik nama untuk mencari."
+            )
+
+    @Slot(int, str, str)
+    def _on_geopas_task_failed(self, token: int, kind: str, message: str) -> None:
+        if kind in ("kabupaten", "kecamatan"):
+            if token != self._wilayah_token:
+                return
+            self.geopas_status.setText(f"Gagal memuat wilayah: {message}")
+            self.geopas_status.setStyleSheet("color: #e57373;")
+            QMessageBox.warning(self, "Geopas", message)
+            return
+        if kind != "paket" or token != self._paket_token:
+            return
+        self._enable_paket_search_field()
+        self._reset_combo(self.paket_combo)
+        self._enable_paket_search_field()
+        self.paket_combo.setItemText(0, f"Gagal memuat paket: {message}")
+        self.geopas_status.setText(f"Gagal memuat paket: {message}")
+        self.geopas_status.setStyleSheet("color: #e57373;")
+
+    def _apply_wilayah_children(self, kind: str, kids: list[Wilayah]) -> None:
+        self._merge_wilayah(kids)
+        if kind == "kabupaten":
+            self._fill_combo(self.kabupaten_combo, kids, lambda w: w.nama)
+        else:
+            self._fill_combo(self.kecamatan_combo, kids, lambda w: w.nama)
+
+    def _load_wilayah_children(self, parent: Wilayah, kind: str) -> None:
         cached = children_of(parent, self._wilayah)
         if cached:
-            return cached
+            self._apply_wilayah_children(kind, cached)
+            return
         if self._geopas_client is None:
-            return []
-        try:
-            kids = self._geopas_client.list_wilayah(parent_kode=parent.kode)
-        except GeopasError as exc:
-            QMessageBox.warning(self, "Geopas", str(exc))
-            return []
-        self._merge_wilayah(kids)
-        return kids
+            return
+        client = self._geopas_client
+        kode = parent.kode
+        token = self._wilayah_token
+        self.geopas_status.setStyleSheet("")
+        self.geopas_status.setText(
+            "Memuat kabupaten…" if kind == "kabupaten" else "Memuat kecamatan…"
+        )
+
+        def _fn() -> list[Wilayah]:
+            return client.list_wilayah(parent_kode=kode)
+
+        self._run_geopas_task(token, kind, _fn)
 
     def _on_provinsi_changed(self, _index: int = 0) -> None:
         provinsi = self.provinsi_combo.currentData()
         self._reset_combo(self.kabupaten_combo)
         self._reset_combo(self.kecamatan_combo)
+        self._wilayah_token += 1
+        self._paket_token += 1
         if provinsi is None:
             self._reset_combo(self.paket_combo)
             return
-        kabupaten = self._fetch_children(provinsi)
-        self._fill_combo(self.kabupaten_combo, kabupaten, lambda w: w.nama)
+        self._load_wilayah_children(provinsi, "kabupaten")
         self._refresh_paket_combo()
 
     def _on_kabupaten_changed(self, _index: int = 0) -> None:
         kabupaten = self.kabupaten_combo.currentData()
         self._reset_combo(self.kecamatan_combo)
+        self._wilayah_token += 1
         if kabupaten is not None:
-            kecamatan = self._fetch_children(kabupaten)
-            self._fill_combo(self.kecamatan_combo, kecamatan, lambda w: w.nama)
+            self._load_wilayah_children(kabupaten, "kecamatan")
         self._refresh_paket_combo()
 
     def _on_kecamatan_changed(self, _index: int = 0) -> None:
@@ -741,32 +883,30 @@ class MainWindow(QMainWindow):
         kecamatan = self.kecamatan_combo.currentData()
         kabupaten = self.kabupaten_combo.currentData()
         provinsi = self.provinsi_combo.currentData()
-        rows: list[PaketPekerjaan] = []
+        self._paket_token += 1
         if self._geopas_client is not None and (
-            kecamatan is not None or kabupaten is not None or provinsi is not None
+            kabupaten is not None or provinsi is not None
         ):
-            try:
-                if kabupaten is not None:
-                    rows = self._geopas_client.list_paket_pekerjaan(
-                        kabupaten_id=kabupaten.id,
-                    )
-                elif provinsi is not None:
-                    rows = self._geopas_client.list_paket_pekerjaan(
-                        provinsi_id=provinsi.id,
-                    )
-            except GeopasError as exc:
-                self._enable_paket_search_field()
-                self._reset_combo(self.paket_combo)
-                self._enable_paket_search_field()
-                self.paket_combo.setItemText(0, f"Gagal memuat paket: {exc}")
-                return
-        else:
-            rows = filter_paket(
-                self._paket,
-                provinsi=provinsi,
-                kabupaten=kabupaten,
-                kecamatan=kecamatan,
-            )
+            client = self._geopas_client
+            kab_id = kabupaten.id if kabupaten is not None else None
+            prov_id = provinsi.id if provinsi is not None else None
+            token = self._paket_token
+            self.geopas_status.setStyleSheet("")
+            self.geopas_status.setText("Memuat paket pekerjaan…")
+
+            def _fn() -> list[PaketPekerjaan]:
+                if kab_id is not None:
+                    return client.list_paket_pekerjaan(kabupaten_id=kab_id)
+                return client.list_paket_pekerjaan(provinsi_id=prov_id)
+
+            self._run_geopas_task(token, "paket", _fn)
+            return
+        rows = filter_paket(
+            self._paket,
+            provinsi=provinsi,
+            kabupaten=kabupaten,
+            kecamatan=kecamatan,
+        )
         self._fill_paket_combo(rows)
 
     def _sync_config_from_ui(self) -> None:
@@ -1344,6 +1484,9 @@ class MainWindow(QMainWindow):
 
 def run_gui() -> int:
     setup_logging()
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("Drone Compressor")
     window = MainWindow()
