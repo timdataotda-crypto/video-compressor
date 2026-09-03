@@ -74,7 +74,7 @@ exe = EXE(
     upx=False,
     console=False,
     disable_windowed_traceback=False,
-    argv_emulation=True,
+    argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
@@ -103,5 +103,7 @@ app = BUNDLE(
         "CFBundleVersion": "0.2.2",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
+        "NSQuitAlwaysKeepsWindows": False,
+        "LSMultipleInstancesProhibited": True,
     },
 )

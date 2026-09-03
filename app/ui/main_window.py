@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections import defaultdict
 
-from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QGuiApplication, QPixmap
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -54,8 +54,11 @@ from app.ui.job_table import JobTable
 from app.ui.settings_dialog import SettingsDialog
 from app.utils.batch_paths import infer_batch_roots
 from app.utils.deps import check_ffmpeg_deps
-from app.utils.logger import setup_logging
+from app.utils.logger import get_logger, setup_logging
 from app.utils.paths import get_project_root, load_config, save_config
+from app.utils.window import clamp_window_to_screen
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -183,8 +186,19 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._load_styles()
+
+    def _after_shown(self) -> None:
+        # Dialog modal sebelum window.show() di macOS bisa menahan proses
+        # tanpa jendela yang terlihat, sehingga buka ulang dari Dock/terminal
+        # hanya mengaktifkan instance kosong.
         self._check_dependencies()
         self._maybe_offer_resume()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        event.accept()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def _check_dependencies(self) -> None:
         status = check_ffmpeg_deps()
@@ -1482,13 +1496,90 @@ class MainWindow(QMainWindow):
                 self.output_edit.setText(f"{path.parent}_COMPRESSED")
 
 
+def _window_is_on_a_screen(window: QMainWindow) -> bool:
+    frame = window.frameGeometry()
+    for screen in QGuiApplication.screens():
+        overlap = screen.availableGeometry().intersected(frame)
+        if overlap.width() >= 80 and overlap.height() >= 80:
+            return True
+    return False
+
+
+def bring_window_to_front(window: QMainWindow) -> None:
+    if window.isMinimized():
+        window.showNormal()
+    else:
+        window.show()
+    screen = window.screen() or QGuiApplication.primaryScreen()
+    if screen is not None:
+        target = clamp_window_to_screen(
+            window.frameGeometry(), screen.availableGeometry()
+        )
+        if target != window.frameGeometry():
+            window.setGeometry(target)
+    window.raise_()
+    window.activateWindow()
+
+
+def restore_main_windows(app: QApplication) -> None:
+    modal = [
+        widget
+        for widget in app.topLevelWidgets()
+        if widget.isVisible()
+        and widget.windowModality() != Qt.WindowModality.NonModal
+        and not isinstance(widget, MainWindow)
+    ]
+    if modal:
+        return
+    for widget in app.topLevelWidgets():
+        if not isinstance(widget, MainWindow):
+            continue
+        if (
+            widget.isMinimized()
+            or not widget.isVisible()
+            or not _window_is_on_a_screen(widget)
+        ):
+            bring_window_to_front(widget)
+        else:
+            widget.raise_()
+            widget.activateWindow()
+        return
+
+
+class _CompressorApp(QApplication):
+    """QApplication yang menampilkan ulang window saat ikon Dock diklik."""
+
+    def event(self, event: QEvent) -> bool:
+        should_restore = event.type() == QEvent.Type.ApplicationActivate
+        if event.type() == QEvent.Type.ApplicationStateChange:
+            should_restore = (
+                self.applicationState() == Qt.ApplicationState.ApplicationActive
+            )
+        if should_restore and not getattr(self, "_restoring_window", False):
+            self._restoring_window = True
+            try:
+                restore_main_windows(self)
+            finally:
+                self._restoring_window = False
+        return super().event(event)
+
+
 def run_gui() -> int:
     setup_logging()
+    logger.info("Starting GUI")
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
-    app = QApplication(sys.argv)
+    app = _CompressorApp(sys.argv)
     app.setApplicationName("Drone Compressor")
+    app.setOrganizationName("DroneCompressor")
+    app.setOrganizationDomain("dronecompressor.app")
+    app.setQuitOnLastWindowClosed(True)
     window = MainWindow()
-    window.show()
-    return app.exec()
+    bring_window_to_front(window)
+    QTimer.singleShot(0, window._after_shown)
+    try:
+        return app.exec()
+    except Exception:
+        logger.exception("GUI berhenti karena error")
+        raise
