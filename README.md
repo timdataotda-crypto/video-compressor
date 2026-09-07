@@ -83,16 +83,19 @@ App menyimpan config/log/DB di `%LOCALAPPDATA%\DroneCompressor\`
 
 ## Untuk user macOS
 
-Unduh zip dari halaman Release, extract, lalu buka `DroneCompressor.app`.
+Minimum: **macOS 12 Monterey** (12.7.6 didukung). Jangan pakai rilis sebelum v0.2.3 di Monterey — Qt 6.10+ di installer lama wajib macOS 13+ dan app langsung gagal start.
 
-- Mac **Intel**: `DroneCompressor-macos.zip`
+Unduh zip dari halaman Release, extract, lalu pindahkan `DroneCompressor.app` ke **Applications**.
+
+- Mac **Intel** (MacBook Air Core i5, dll.): `DroneCompressor-macos.zip`
 - Mac **Apple Silicon** (M1/M2/M3): `DroneCompressor-macos-arm64.zip`
 
 Kalau macOS menolak membuka: klik kanan app → Open. Atau di Terminal:
 
 ```bash
-xattr -cr DroneCompressor.app
-open DroneCompressor.app
+xattr -cr /Applications/DroneCompressor.app
+killall DroneCompressor 2>/dev/null || true
+open /Applications/DroneCompressor.app
 ```
 
 ## Dokumentasi

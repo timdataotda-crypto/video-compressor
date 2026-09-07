@@ -1,4 +1,6 @@
-PySide6>=6.6.0
+# PySide 6.10+ wheels are macosx_13_0 and crash on Monterey 12.7.6.
+# 6.9.3 is the last line with macosx_12_0 (Intel MacBook Air / macOS 12).
+PySide6==6.9.3
 pytest>=8.0.0
-pyinstaller>=6.0.0
+pyinstaller>=6.0.0,<7
 certifi>=2024.0.0

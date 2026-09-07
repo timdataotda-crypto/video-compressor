@@ -99,10 +99,10 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "Drone Compressor",
         "CFBundleDisplayName": "Drone Compressor",
-        "CFBundleShortVersionString": "0.2.2",
-        "CFBundleVersion": "0.2.2",
+        "CFBundleShortVersionString": "0.2.3",
+        "CFBundleVersion": "0.2.3",
         "NSHighResolutionCapable": True,
-        "LSMinimumSystemVersion": "11.0",
+        "LSMinimumSystemVersion": "12.0",
         "NSQuitAlwaysKeepsWindows": False,
         "LSMultipleInstancesProhibited": True,
     },

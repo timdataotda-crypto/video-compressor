@@ -11,7 +11,7 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-pip install -q "pyinstaller>=6.0"
+pip install -q -r "$ROOT/requirements.txt"
 
 FFMPEG="$ROOT/bin/macos/ffmpeg"
 if [[ ! -e "$FFMPEG" ]] || [[ -L "$FFMPEG" ]]; then
@@ -19,12 +19,16 @@ if [[ ! -e "$FFMPEG" ]] || [[ -L "$FFMPEG" ]]; then
   bash "$ROOT/scripts/fetch_static_ffmpeg_macos.sh"
 fi
 
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+python "$ROOT/scripts/check_macos_minos.py" --pyside
+
 echo "Building DroneCompressor.app…"
 rm -rf build dist
 pyinstaller --noconfirm build_macos.spec
 
 APP="$ROOT/dist/DroneCompressor.app"
 if [[ -d "$APP" ]]; then
+  python "$ROOT/scripts/check_macos_minos.py" "$APP"
   codesign --force --deep --sign - "$APP" || true
   xattr -cr "$APP" || true
   echo ""
