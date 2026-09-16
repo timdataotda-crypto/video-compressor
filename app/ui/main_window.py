@@ -47,7 +47,7 @@ from app.core.profiles import (
 from app.database.database import Database
 from app.ffmpeg.ffprobe import FFprobeError, probe_video
 from app.geopas.client import GeopasClient, GeopasError
-from app.geopas.models import PaketPekerjaan, Wilayah
+from app.geopas.models import PaketPekerjaan, PaketSearchResult, Wilayah
 from app.geopas.wilayah import children_of, filter_paket, split_wilayah
 from app.models.job import Job, JobStatus
 from app.ui.job_table import JobTable
@@ -203,7 +203,7 @@ class MainWindow(QMainWindow):
     def _check_dependencies(self) -> None:
         status = check_ffmpeg_deps()
         if status.ok:
-            self.summary_label.setText(status.ffmpeg_version)
+            self.summary_label.setText("copyright @gitcode1101")
             return
         QMessageBox.critical(self, "FFmpeg tidak ditemukan", status.message)
         self.start_btn.setEnabled(False)
@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
             self._fill_combo(
                 self.paket_combo,
                 self._paket,
-                lambda p: f"{p.nama} (#{p.id})",
+                lambda p: p.display_label(),
             )
         self.geopas_status.setText(
             f"Terhubung. {len(grouped['provinsi'])} provinsi. "
@@ -632,7 +632,9 @@ class MainWindow(QMainWindow):
         self.paket_combo.setMinimumContentsLength(24)
         line = self.paket_combo.lineEdit()
         if line is not None:
-            line.setPlaceholderText("Ketik nama paket untuk mencari…")
+            line.setPlaceholderText(
+                "Ketik nama / kontrak / ID — cari juga di luar kabupaten…"
+            )
             line.textEdited.connect(self._on_paket_text_edited)
         completer = self.paket_combo.completer()
         if completer is None:
@@ -648,7 +650,9 @@ class MainWindow(QMainWindow):
         self.paket_combo.setEditable(True)
         line = self.paket_combo.lineEdit()
         if line is not None:
-            line.setPlaceholderText("Ketik nama paket untuk mencari…")
+            line.setPlaceholderText(
+                "Ketik nama / kontrak / ID — cari juga di luar kabupaten…"
+            )
 
     def _on_paket_text_edited(self, _text: str) -> None:
         if self._paket_updating:
@@ -665,18 +669,17 @@ class MainWindow(QMainWindow):
         provinsi = self.provinsi_combo.currentData()
         client = self._geopas_client
         kab_id = kabupaten.id if kabupaten is not None else None
-        prov_id = (
-            None
-            if kabupaten is not None
-            else (provinsi.id if provinsi is not None else None)
-        )
+        # Saat search teks, selalu kirim provinsi agar fallback kab→provinsi jalan.
+        prov_id = provinsi.id if provinsi is not None else None
         self._pending_search_query = query
         self._paket_token += 1
         token = self._paket_token
+        self.geopas_status.setStyleSheet("")
+        self.geopas_status.setText(f"Mencari “{query}”…")
 
-        def _fn() -> list[PaketPekerjaan]:
-            return client.list_paket_pekerjaan(
-                nama=query,
+        def _fn() -> PaketSearchResult:
+            return client.search_paket_pekerjaan(
+                query,
                 kabupaten_id=kab_id,
                 provinsi_id=prov_id,
             )
@@ -691,11 +694,18 @@ class MainWindow(QMainWindow):
         self._paket = rows
         self._paket_updating = True
         try:
-            self._fill_combo(
-                self.paket_combo,
-                rows,
-                lambda p: f"{p.nama} (#{p.id})",
-            )
+            self.paket_combo.blockSignals(True)
+            self.paket_combo.clear()
+            self.paket_combo.addItem("— Pilih —", None)
+            for paket in rows:
+                self.paket_combo.addItem(paket.display_label(), paket)
+                idx = self.paket_combo.count() - 1
+                tip = paket.tooltip()
+                self.paket_combo.setItemData(
+                    idx, tip, Qt.ItemDataRole.ToolTipRole
+                )
+            self.paket_combo.setEnabled(True)
+            self.paket_combo.blockSignals(False)
             self._enable_paket_search_field()
             completer = self.paket_combo.completer()
             if completer is not None:
@@ -704,7 +714,10 @@ class MainWindow(QMainWindow):
             if keep_text:
                 self.paket_combo.setEditText(keep_text)
             elif not rows:
-                self.paket_combo.setItemText(0, "Tidak ada paket — ketik nama untuk cari")
+                self.paket_combo.setItemText(
+                    0,
+                    "Tidak ditemukan — ketik nama lain / cek di Geopas",
+                )
                 self.paket_combo.setEditText("")
         finally:
             self._paket_updating = False
@@ -722,7 +735,7 @@ class MainWindow(QMainWindow):
             if item is not None and (text == label or text in label):
                 return item
         for p in self._paket:
-            if text in p.nama.lower() or text == str(p.id):
+            if p.matches(text):
                 return p
         return None
 
@@ -798,31 +811,47 @@ class MainWindow(QMainWindow):
             return
         if token != self._paket_token:
             return
-        rows = (
-            [item for item in result if isinstance(item, PaketPekerjaan)]
-            if isinstance(result, list)
-            else []
-        )
+        used_fallback = False
         keep: str | None = None
-        if kind == "search":
+        if kind == "search" and isinstance(result, PaketSearchResult):
+            rows = list(result.items)
+            used_fallback = result.used_fallback
             keep = self._pending_search_query
             if not rows and keep:
-                needle = keep.lower()
-                rows = [
-                    p
-                    for p in self._paket
-                    if needle in p.nama.lower() or keep in str(p.id)
-                ]
+                rows = [p for p in self._paket if p.matches(keep)]
+        else:
+            rows = (
+                [item for item in result if isinstance(item, PaketPekerjaan)]
+                if isinstance(result, list)
+                else []
+            )
+            if kind == "search":
+                keep = self._pending_search_query
+                if not rows and keep:
+                    rows = [p for p in self._paket if p.matches(keep)]
         self._fill_paket_combo(rows, keep_text=keep)
         self.geopas_status.setStyleSheet("")
         count = len(rows)
         if kind == "search":
-            self.geopas_status.setText(
-                f"{count} paket ditemukan. Ketik nama untuk mencari lagi."
-            )
+            if count == 0:
+                self.geopas_status.setText(
+                    "Tidak ditemukan di Geopas. Coba kata lain, atau pastikan "
+                    "paket sudah diinput admin."
+                )
+            elif used_fallback:
+                self.geopas_status.setText(
+                    f"{count} paket ditemukan di luar kabupaten terpilih "
+                    "(data wilayah Geopas mungkin tidak konsisten). "
+                    "Hover item untuk detail."
+                )
+            else:
+                self.geopas_status.setText(
+                    f"{count} paket ditemukan. Ketik nama untuk mencari lagi."
+                )
         else:
             self.geopas_status.setText(
-                f"{count} paket dimuat. Ketik nama untuk mencari."
+                f"{count} paket dimuat. Ketik nama untuk mencari "
+                "(termasuk di luar kabupaten)."
             )
 
     @Slot(int, str, str)
@@ -834,7 +863,7 @@ class MainWindow(QMainWindow):
             self.geopas_status.setStyleSheet("color: #e57373;")
             QMessageBox.warning(self, "Geopas", message)
             return
-        if kind != "paket" or token != self._paket_token:
+        if kind not in ("paket", "search") or token != self._paket_token:
             return
         self._enable_paket_search_field()
         self._reset_combo(self.paket_combo)

@@ -45,6 +45,121 @@ def test_classify_and_children() -> None:
     assert children_of(kab, [prov, kab, kec]) == [kec]
 
 
+def test_paket_prefers_nama_over_nama_paket() -> None:
+    raw = {
+        "id": 6150,
+        "nama": "Penanganan Jembatan Lumut (Uwag - Bts. Aceh Tengah/Gayo Lues)",
+        "nama_paket": (
+            "PENANGANAN TANGGAP DARURAT RUAS JALAN SP. UNING "
+            "(BTS. KOTA TAKENGON) BTS. ACEH TENGAH/GAYO LUES"
+        ),
+        "no_kontrak": "HK0201/CTR-Bpjn1.7/BUN/2026/16",
+        "nama_kegiatan": "Preservasi Jalan Nasional",
+        "kabupaten_id": 1221,
+        "provinsi_id": 1,
+    }
+    paket = PaketPekerjaan.from_api(raw)
+    assert paket is not None
+    assert "Jembatan Lumut" in paket.nama
+    assert "TANGGAP DARURAT" in paket.nama_paket
+    assert paket.matches("lumut")
+    assert paket.matches("uning")
+    assert paket.matches("HK0201")
+    assert paket.matches("Preservasi")
+    assert paket.matches("6150")
+    assert not paket.matches("xyz")
+    assert "#6150" in paket.display_label()
+    tip = paket.tooltip()
+    assert "Nama paket:" in tip
+    assert "No. kontrak:" in tip
+
+
+def test_search_paket_falls_back_outside_kabupaten(monkeypatch) -> None:
+    calls: list[dict[str, str]] = []
+
+    class FakeResp:
+        status = 200
+
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None, **_kwargs):
+        from urllib.parse import parse_qs, urlparse
+
+        qs = {k: v[0] for k, v in parse_qs(urlparse(req.full_url).query).items()}
+        calls.append(qs)
+        if qs.get("kabupaten_id") == "1221":
+            return FakeResp(b'{"success":true,"data":[]}')
+        if qs.get("provinsi_id") == "1":
+            body = (
+                b'{"success":true,"data":[{"id":6151,'
+                b'"nama":"Rehabilitasi SPAM Blangkejeren",'
+                b'"nama_paket":"SPAM Pasca Bencana",'
+                b'"kabupaten_id":6460,"provinsi_id":1}]}'
+            )
+            return FakeResp(body)
+        return FakeResp(b'{"success":true,"data":[]}')
+
+    monkeypatch.setattr("app.geopas.client.urlopen", fake_urlopen)
+    client = GeopasClient("https://geopas.example/api")
+    client.token = "jwt"
+    result = client.search_paket_pekerjaan(
+        "spam blangkejeren",
+        kabupaten_id=1221,
+        provinsi_id=1,
+    )
+    assert result.used_fallback is True
+    assert result.scope == "provinsi"
+    assert len(result.items) == 1
+    assert result.items[0].id == 6151
+    assert any(c.get("kabupaten_id") == "1221" for c in calls)
+    assert any(c.get("provinsi_id") == "1" and "kabupaten_id" not in c for c in calls)
+
+
+def test_search_paket_keeps_kabupaten_when_hit(monkeypatch) -> None:
+    class FakeResp:
+        status = 200
+
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None, **_kwargs):
+        return FakeResp(
+            b'{"success":true,"data":[{"id":6150,"nama":"Penanganan Jembatan Lumut",'
+            b'"kabupaten_id":1221,"provinsi_id":1}]}'
+        )
+
+    monkeypatch.setattr("app.geopas.client.urlopen", fake_urlopen)
+    client = GeopasClient("https://geopas.example/api")
+    client.token = "jwt"
+    result = client.search_paket_pekerjaan(
+        "lumut",
+        kabupaten_id=1221,
+        provinsi_id=1,
+    )
+    assert result.used_fallback is False
+    assert result.scope == "kabupaten"
+    assert result.items[0].id == 6150
+
+
 def test_filter_paket_falls_back_to_kabupaten() -> None:
     prov = Wilayah(id=1, kode="13", parent_kode="", nama="Sumbar")
     kab = Wilayah(id=2, kode="1301", parent_kode="13", nama="Mentawai")

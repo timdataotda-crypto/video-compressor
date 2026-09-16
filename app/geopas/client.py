@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 import certifi
 
-from app.geopas.models import PaketPekerjaan, Wilayah
+from app.geopas.models import PaketPekerjaan, PaketSearchResult, Wilayah
 
 _MAX_VIDEO_BYTES = 50 * 1024 * 1024
 _PAGE_SIZE = 500
@@ -157,13 +157,63 @@ class GeopasClient:
             if item is not None:
                 out.append(item)
         if query:
-            needle = query.lower()
-            out = [
-                p
-                for p in out
-                if needle in p.nama.lower() or needle in str(p.id)
-            ]
+            out = [p for p in out if p.matches(query)]
         return out
+
+    def search_paket_pekerjaan(
+        self,
+        query: str,
+        *,
+        kabupaten_id: Optional[int] = None,
+        provinsi_id: Optional[int] = None,
+    ) -> PaketSearchResult:
+        """Cari paket by teks; longgarkan filter wilayah jika kosong.
+
+        Urutan: kabupaten → provinsi → nama saja. Berguna saat
+        `kabupaten_id` di Geopas salah/tidak konsisten.
+        """
+        text = (query or "").strip()
+        if len(text) < 2:
+            return PaketSearchResult(items=[], used_fallback=False, scope="none")
+
+        if kabupaten_id is not None:
+            rows = self.list_paket_pekerjaan(nama=text, kabupaten_id=kabupaten_id)
+            if rows:
+                return PaketSearchResult(
+                    items=rows, used_fallback=False, scope="kabupaten"
+                )
+            if provinsi_id is not None:
+                rows = self.list_paket_pekerjaan(nama=text, provinsi_id=provinsi_id)
+                if rows:
+                    return PaketSearchResult(
+                        items=rows, used_fallback=True, scope="provinsi"
+                    )
+            rows = self.list_paket_pekerjaan(nama=text)
+            return PaketSearchResult(
+                items=rows,
+                used_fallback=True,
+                scope="nama" if rows else "empty",
+            )
+
+        if provinsi_id is not None:
+            rows = self.list_paket_pekerjaan(nama=text, provinsi_id=provinsi_id)
+            if rows:
+                return PaketSearchResult(
+                    items=rows, used_fallback=False, scope="provinsi"
+                )
+            rows = self.list_paket_pekerjaan(nama=text)
+            return PaketSearchResult(
+                items=rows,
+                used_fallback=True,
+                scope="nama" if rows else "empty",
+            )
+
+        rows = self.list_paket_pekerjaan(nama=text)
+        return PaketSearchResult(
+            items=rows,
+            used_fallback=False,
+            scope="nama" if rows else "empty",
+        )
 
     def upload_video(self, paket_id: int, video_path: Path) -> Any:
         path = Path(video_path)
