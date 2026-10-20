@@ -420,9 +420,20 @@ class GeopasClient:
         return payload
 
 
+_INTERMEDIATE_CERTS_DIR = Path(__file__).resolve().parent / "certs"
+
+
 def _ssl_context() -> ssl.SSLContext:
-    """OpenSSL di app PyInstaller tidak memakai Keychain macOS; CA harus dibundle."""
-    return ssl.create_default_context(cafile=certifi.where())
+    """OpenSSL di app PyInstaller tidak memakai Keychain macOS; CA harus dibundle.
+
+    Server Geopas tidak mengirim intermediate Sectigo DV R36, dan OpenSSL tidak
+    mengunduhnya lewat AIA seperti browser/Keychain, jadi intermediate ikut dibundle.
+    """
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    if _INTERMEDIATE_CERTS_DIR.is_dir():
+        for pem in sorted(_INTERMEDIATE_CERTS_DIR.glob("*.pem")):
+            ctx.load_verify_locations(cafile=str(pem))
+    return ctx
 
 
 def _connect_error_message(exc: BaseException) -> str:

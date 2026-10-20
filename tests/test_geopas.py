@@ -551,6 +551,14 @@ def test_ssl_context_uses_bundled_ca() -> None:
     assert Path(certifi.where()).is_file()
 
 
+def test_ssl_context_includes_sectigo_dv_r36_intermediate() -> None:
+    subjects = [
+        dict(part[0] for part in cert["subject"]).get("commonName")
+        for cert in _ssl_context().get_ca_certs()
+    ]
+    assert "Sectigo Public Server Authentication CA DV R36" in subjects
+
+
 def test_ssl_error_message() -> None:
     msg = _connect_error_message(
         URLError(ssl.SSLError("CERTIFICATE_VERIFY_FAILED"))

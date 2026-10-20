@@ -15,6 +15,7 @@ datas = [
     (str(root / "config.json"), "."),
     (str(root / "logo-geopas.png"), "."),
     (str(root / "app" / "ui" / "styles.qss"), "app/ui"),
+    (str(root / "app" / "geopas" / "certs"), "app/geopas/certs"),
 ]
 
 bin_dir = root / "bin" / "macos"
