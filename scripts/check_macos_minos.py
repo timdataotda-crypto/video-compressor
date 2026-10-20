@@ -29,7 +29,7 @@ def macho_minos(path: Path) -> tuple[int, int] | None:
         )
     except (OSError, subprocess.CalledProcessError):
         return None
-    if "Mach header" not in out and "fat_magic" not in out:
+    if "Load command" not in out:
         return None
     highest: tuple[int, int] | None = None
     lines = out.splitlines()
